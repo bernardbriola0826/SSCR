@@ -718,7 +718,7 @@ function StudentsTab({ students, canWrite, reload, notify, onError }) {
 
   const q = filter.trim().toLowerCase();
   const shown = q
-    ? students.filter((s) => [s.studentNo, s.lastName, s.firstName, s.course, s.section].some((v) => String(v || '').toLowerCase().includes(q)))
+    ? students.filter((s) => [s.studentNo, s.lastName, s.firstName, s.middleName, s.course, s.section].some((v) => String(v || '').toLowerCase().includes(q)))
     : students;
   const visible = shown.slice(0, 200); // keeps the page fast with thousands of students
 
@@ -789,20 +789,21 @@ function StudentsTab({ students, canWrite, reload, notify, onError }) {
         <table className="w-full border-collapse">
           <thead>
             <tr className={theadCls}>
-              {['Student ID', 'Last Name', 'First Name', 'Level', 'Year Level', 'Course', 'Section', 'Guardian Contact', 'Violations', ...(canWrite ? ['Actions'] : [])].map((h) => (
+              {['Student ID', 'Last Name', 'First Name', 'Middle Name', 'Level', 'Year Level', 'Course', 'Section', 'Guardian Contact', 'Violations', ...(canWrite ? ['Actions'] : [])].map((h) => (
                 <th key={h} className="p-3 text-left">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody className="bg-white">
             {shown.length === 0 && (
-              <tr><td colSpan={10} className="p-6 text-center text-gray-500 italic">{students.length === 0 ? 'No students yet.' : 'No students match your search.'}</td></tr>
+              <tr><td colSpan={11} className="p-6 text-center text-gray-500 italic">{students.length === 0 ? 'No students yet.' : 'No students match your search.'}</td></tr>
             )}
             {visible.map((s) => (
               <tr key={s.id} className="border-b hover:bg-gray-50 transition">
                 <td className="p-3 font-bold text-red-900">{s.studentNo}</td>
                 <td className="p-3">{s.lastName}</td>
                 <td className="p-3">{s.firstName}</td>
+                <td className="p-3">{s.middleName}</td>
                 <td className="p-3">{s.educationLevel}</td>
                 <td className="p-3">{s.yearLevel}</td>
                 <td className="p-3">{s.course}</td>
