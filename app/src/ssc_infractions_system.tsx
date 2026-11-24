@@ -1,159 +1,846 @@
-import React, { useState, useEffect } from 'react';
-import { Search, Plus, Download, Printer, Edit, Trash2, X, Check, AlertCircle } from 'lucide-react';
+// @ts-nocheck
+import React, { useState, useEffect, useCallback } from 'react';
+import { Printer, Download, Trash2 } from 'lucide-react';
+
+const SEVERITIES = ['Minor', 'Major', 'Critical'];
+const STATUSES = ['Pending', 'Ongoing', 'Resolved', 'Dismissed'];
+const VIOLATION_TYPES = ['Tardiness', 'Uniform Violation', 'Behavioral Misconduct', 'Academic Dishonesty', 'Bullying/Harassment'];
+const LEVELS = ['Grade School', 'Junior High', 'Senior High', 'College'];
+const ROLES = ['admin', 'staff', 'viewer'];
+
+const inputCls = 'w-full p-2 border-2 border-gray-300 rounded-lg focus:border-red-900 focus:outline-none';
+const bigInputCls = 'w-full p-3 border-2 border-gray-300 rounded-lg focus:border-red-900 focus:outline-none';
+const labelCls = 'block font-semibold mb-2 text-gray-700';
+const btnCls = 'bg-gradient-to-r from-red-900 to-yellow-600 text-white font-bold px-6 py-3 rounded-lg hover:shadow-lg transition disabled:opacity-60';
+const theadCls = 'bg-gradient-to-r from-red-900 to-yellow-600 text-white';
+
+const sevCls = (s) => (s === 'Minor' ? 'bg-yellow-200 text-yellow-800' : s === 'Major' ? 'bg-orange-300 text-orange-900' : 'bg-red-500 text-white');
+const statCls = (s) => (s === 'Resolved' ? 'bg-green-500 text-white' : s === 'Pending' ? 'bg-yellow-400 text-yellow-900' : 'bg-blue-500 text-white');
+
+// ---------- helpers ----------
+
+async function api(path, { method = 'GET', body } = {}) {
+  const res = await fetch('/api' + path, {
+    method,
+    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+    credentials: 'same-origin',
+  });
+  let data = null;
+  try {
+    data = await res.json();
+  } catch {
+    /* no JSON body */
+  }
+  if (!res.ok) {
+    const err = new Error((data && data.error) || 'Request failed');
+    err.status = res.status;
+    throw err;
+  }
+  return data;
+}
+
+const pad = (n) => String(n).padStart(2, '0');
+const toLocalDate = (iso) => {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+const nowTime = () => {
+  const d = new Date();
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+
+const csvCell = (v) => {
+  let s = v == null ? '' : String(v);
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; // stops spreadsheet formula injection
+  return '"' + s.replace(/"/g, '""') + '"';
+};
+
+function exportCsv(rows) {
+  const head = ['Record No', 'Date', 'Student ID', 'Student Name', 'Level', 'Violation', 'Severity', 'Status', 'Sanction', 'Recorded By'];
+  const lines = [head.map(csvCell).join(',')].concat(
+    rows.map((v) =>
+      [v.recordNo, toLocalDate(v.occurredAt), v.studentNo, v.studentName, v.educationLevel, v.violationType, v.severity, v.status, v.sanction, v.recordedBy]
+        .map(csvCell)
+        .join(',')
+    )
+  );
+  const blob = new Blob([lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'violations.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+const SchoolLogo = () => (
+  <svg className="w-20 h-20 bg-white rounded-full p-2 shadow-lg" viewBox="0 0 200 200">
+    <circle cx="100" cy="100" r="95" fill="#8B0000" stroke="#DAA520" strokeWidth="3" />
+    <circle cx="100" cy="100" r="80" fill="white" />
+    <text x="100" y="80" fontFamily="serif" fontSize="32" fontWeight="bold" fill="#8B0000" textAnchor="middle">SSC</text>
+    <text x="100" y="110" fontFamily="serif" fontSize="16" fontWeight="bold" fill="#8B0000" textAnchor="middle">RECOLETOS</text>
+    <path d="M100 35 L95 40 Q85 45 85 55 Q85 65 100 75 Q115 65 115 55 Q115 45 105 40 Z" fill="#DC143C" />
+    <path d="M75 130 L75 145 Q75 150 100 148 Q125 150 125 145 L125 130 Q125 125 100 127 Q75 125 75 130 Z" fill="#8B0000" />
+    <line x1="100" y1="130" x2="100" y2="148" stroke="white" strokeWidth="2" />
+    <text x="100" y="170" fontFamily="serif" fontSize="12" fontWeight="bold" fill="#8B0000" textAnchor="middle">MANILA • 1941</text>
+    <path d="M40 100 L35 95 L40 90 L45 95 Z" fill="#DAA520" />
+    <path d="M160 100 L155 95 L160 90 L165 95 Z" fill="#DAA520" />
+  </svg>
+);
+
+const Header = ({ title, children }) => (
+  <div className="text-center mb-6">
+    <h1 className="text-3xl font-bold text-red-900 mb-2">{title}</h1>
+    <p className="font-semibold text-lg text-red-900">San Sebastian College-Recoletos, Manila</p>
+    <p className="text-gray-600 font-medium">Office of Student Affairs and Services</p>
+    {children}
+  </div>
+);
+
+// ---------- sign in / password change ----------
+
+function LoginScreen({ onLogin, error, busy }) {
+  const [form, setForm] = useState({ username: '', password: '' });
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-red-900 to-yellow-600 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
+        <Header title="🔐 Sign In">
+          <p className="text-gray-700 mt-2">Student Infractions Tracking System</p>
+        </Header>
+        {error && <div className="mb-4 p-3 rounded bg-red-100 text-red-800">{error}</div>}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            onLogin(form.username, form.password);
+          }}
+          className="space-y-4"
+        >
+          <div>
+            <label className={labelCls}>Username</label>
+            <input type="text" autoComplete="username" autoFocus required value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} className={bigInputCls} />
+          </div>
+          <div>
+            <label className={labelCls}>Password</label>
+            <input type="password" autoComplete="current-password" required value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className={bigInputCls} />
+          </div>
+          <button type="submit" disabled={busy} className="w-full bg-gradient-to-r from-red-900 to-yellow-600 text-white font-bold py-3 rounded-lg hover:shadow-lg transition disabled:opacity-60">
+            {busy ? 'Signing in...' : 'Sign In'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function ChangePasswordScreen({ user, onSubmit, onLogout }) {
+  const [f, setF] = useState({ current: '', next: '', confirm: '' });
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setError('');
+    if (f.next !== f.confirm) return setError('The new passwords do not match');
+    setBusy(true);
+    try {
+      await onSubmit(f.current, f.next);
+    } catch (err) {
+      setError(err.message);
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-red-900 to-yellow-600 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
+        <Header title="🔑 Set a New Password">
+          <p className="text-gray-700 mt-2">Hello, {user?.fullName}. You must replace your temporary password before continuing.</p>
+        </Header>
+        {error && <div className="mb-4 p-3 rounded bg-red-100 text-red-800">{error}</div>}
+        <form onSubmit={submit} className="space-y-4">
+          <div>
+            <label className={labelCls}>Temporary (current) password</label>
+            <input type="password" autoComplete="current-password" required value={f.current} onChange={(e) => setF({ ...f, current: e.target.value })} className={bigInputCls} />
+          </div>
+          <div>
+            <label className={labelCls}>New password (at least 12 characters)</label>
+            <input type="password" autoComplete="new-password" required minLength={12} value={f.next} onChange={(e) => setF({ ...f, next: e.target.value })} className={bigInputCls} />
+          </div>
+          <div>
+            <label className={labelCls}>Confirm new password</label>
+            <input type="password" autoComplete="new-password" required value={f.confirm} onChange={(e) => setF({ ...f, confirm: e.target.value })} className={bigInputCls} />
+          </div>
+          <button type="submit" disabled={busy} className="w-full bg-gradient-to-r from-red-900 to-yellow-600 text-white font-bold py-3 rounded-lg hover:shadow-lg transition disabled:opacity-60">
+            {busy ? 'Saving...' : 'Save New Password'}
+          </button>
+          <button type="button" onClick={onLogout} className="w-full text-gray-600 underline text-sm">Sign out</button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ---------- tabs ----------
+
+function Dashboard({ violations, students }) {
+  const [search, setSearch] = useState('');
+  const now = new Date();
+  const stats = {
+    total: violations.length,
+    pending: violations.filter((v) => v.status === 'Pending').length,
+    thisMonth: violations.filter((v) => {
+      const d = new Date(v.occurredAt);
+      return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+    }).length,
+    critical: violations.filter((v) => v.severity === 'Critical').length,
+  };
+  const q = search.trim();
+  const history = q ? violations.filter((v) => v.studentNo === q) : [];
+  const student = q ? students.find((s) => s.studentNo === q) : null;
+
+  return (
+    <div>
+      <h2 className="text-2xl font-bold mb-6 text-gray-800">Dashboard Overview</h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        {[
+          ['TOTAL VIOLATIONS', stats.total],
+          ['PENDING CASES', stats.pending],
+          ['THIS MONTH', stats.thisMonth],
+          ['CRITICAL CASES', stats.critical],
+        ].map(([label, value]) => (
+          <div key={label} className="bg-gradient-to-br from-red-900 to-yellow-600 text-white p-6 rounded-xl shadow-lg">
+            <h4 className="text-sm opacity-90 mb-2">{label}</h4>
+            <div className="text-5xl font-bold">{value}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="bg-gray-50 p-6 rounded-xl">
+        <h3 className="text-xl font-bold text-red-900 mb-4">🔍 Student Violation History</h3>
+        <div className="mb-4">
+          <input type="text" placeholder="Enter Student ID to view history..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full max-w-md p-3 border-2 border-gray-300 rounded-lg focus:border-red-900 focus:outline-none" />
+        </div>
+        {!q ? (
+          <div className="text-gray-500 italic text-center p-8">Enter a Student ID to view their violation history</div>
+        ) : !student && history.length === 0 ? (
+          <div className="bg-yellow-100 p-4 rounded-lg text-yellow-800">No student found with ID {q}.</div>
+        ) : (
+          <div className="mt-4">
+            <div className="bg-blue-100 p-4 rounded-lg mb-4">
+              <h4 className="font-bold text-blue-900 mb-2">Student Information</h4>
+              <p><strong>ID:</strong> {q}</p>
+              {student && <p><strong>Name:</strong> {student.lastName}, {student.firstName} ({student.educationLevel}{student.yearLevel ? ', ' + student.yearLevel : ''})</p>}
+              <p><strong>Total Violations:</strong> {history.length}</p>
+            </div>
+            {history.length === 0 ? (
+              <div className="bg-green-100 p-4 rounded-lg text-green-800">Student ID {q} has no violation records.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="bg-gray-200">
+                      <th className="p-2 text-left">Date</th>
+                      <th className="p-2 text-left">Violation</th>
+                      <th className="p-2 text-left">Severity</th>
+                      <th className="p-2 text-left">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {history.map((v) => (
+                      <tr key={v.id} className="border-b">
+                        <td className="p-2">{toLocalDate(v.occurredAt)}</td>
+                        <td className="p-2">{v.violationType}</td>
+                        <td className="p-2"><span className={`px-2 py-1 rounded text-xs font-bold ${sevCls(v.severity)}`}>{v.severity}</span></td>
+                        <td className="p-2"><span className={`px-2 py-1 rounded text-xs font-bold ${statCls(v.status)}`}>{v.status}</span></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RecordForm({ students, onSaved, notify, onError }) {
+  const blank = { studentNo: '', violationType: VIOLATION_TYPES[0], severity: 'Minor', status: 'Pending', details: '', sanction: '', remarks: '' };
+  const [f, setF] = useState({ ...blank, date: toLocalDate(new Date()), time: nowTime() });
+  const [saving, setSaving] = useState(false);
+  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  const match = students.find((s) => s.studentNo === f.studentNo.trim());
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await api('/violations', {
+        method: 'POST',
+        body: {
+          studentNo: f.studentNo.trim(),
+          occurredAt: new Date(`${f.date}T${f.time}`).toISOString(),
+          violationType: f.violationType,
+          severity: f.severity,
+          status: f.status,
+          details: f.details,
+          sanction: f.sanction,
+          remarks: f.remarks,
+        },
+      });
+      notify('Violation record saved successfully!', 'success');
+      setF({ ...f, ...blank });
+      onSaved();
+    } catch (err) {
+      onError(err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <form onSubmit={submit} className="bg-gray-50 p-6 rounded-xl">
+      <h3 className="text-xl font-bold text-red-900 mb-6">Record New Violation</h3>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+        <div>
+          <label className={labelCls}>Date *</label>
+          <input type="date" required value={f.date} onChange={set('date')} className={inputCls} />
+        </div>
+        <div>
+          <label className={labelCls}>Time *</label>
+          <input type="time" required value={f.time} onChange={set('time')} className={inputCls} />
+        </div>
+        <div>
+          <label className={labelCls}>Student ID *</label>
+          <input type="text" required placeholder="Enter Student ID" value={f.studentNo} onChange={set('studentNo')} className={inputCls} />
+          {f.studentNo.trim() && (
+            <p className={`text-sm mt-1 ${match ? 'text-green-700' : 'text-red-700'}`}>
+              {match ? `${match.lastName}, ${match.firstName} (${match.educationLevel})` : 'No student with this ID yet'}
+            </p>
+          )}
+        </div>
+        <div>
+          <label className={labelCls}>Violation Type *</label>
+          <select value={f.violationType} onChange={set('violationType')} className={inputCls}>
+            {VIOLATION_TYPES.map((t) => <option key={t}>{t}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className={labelCls}>Severity *</label>
+          <select value={f.severity} onChange={set('severity')} className={inputCls}>
+            {SEVERITIES.map((t) => <option key={t}>{t}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className={labelCls}>Status *</label>
+          <select value={f.status} onChange={set('status')} className={inputCls}>
+            {STATUSES.map((t) => <option key={t}>{t}</option>)}
+          </select>
+        </div>
+      </div>
+      <div className="mb-4">
+        <label className={labelCls}>Violation Details *</label>
+        <textarea rows="3" required maxLength={2000} placeholder="Describe the violation in detail..." value={f.details} onChange={set('details')} className={inputCls}></textarea>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <div>
+          <label className={labelCls}>Sanction</label>
+          <input type="text" maxLength={100} placeholder="e.g. Verbal Warning" value={f.sanction} onChange={set('sanction')} className={inputCls} />
+        </div>
+        <div>
+          <label className={labelCls}>Remarks/Notes</label>
+          <input type="text" maxLength={2000} placeholder="Additional remarks..." value={f.remarks} onChange={set('remarks')} className={inputCls} />
+        </div>
+      </div>
+      <button type="submit" disabled={saving} className={btnCls}>{saving ? 'Saving...' : '💾 Save Violation Record'}</button>
+    </form>
+  );
+}
+
+function ViolationsLog({ violations, canWrite, canDelete, reload, notify, onError }) {
+  const changeStatus = async (v, status) => {
+    try {
+      await api(`/violations/${v.id}`, { method: 'PATCH', body: { status } });
+      notify('Status updated', 'success');
+      reload();
+    } catch (e) {
+      onError(e);
+    }
+  };
+  const remove = async (v) => {
+    if (!window.confirm(`Delete record ${v.recordNo}? This cannot be undone.`)) return;
+    try {
+      await api(`/violations/${v.id}`, { method: 'DELETE' });
+      notify('Record deleted', 'success');
+      reload();
+    } catch (e) {
+      onError(e);
+    }
+  };
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl font-bold text-gray-800">Violations Log</h2>
+        <div className="flex gap-2">
+          <button onClick={() => window.print()} className="bg-green-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-green-700 transition">
+            <Printer size={18} /> Print
+          </button>
+          <button onClick={() => exportCsv(violations)} className="bg-green-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-green-700 transition">
+            <Download size={18} /> Export
+          </button>
+        </div>
+      </div>
+      <div className="overflow-x-auto rounded-lg shadow">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className={theadCls}>
+              {['Record ID', 'Date', 'Student ID', 'Student Name', 'Violation', 'Severity', 'Status', 'Actions'].map((h) => (
+                <th key={h} className="p-3 text-left">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="bg-white">
+            {violations.length === 0 && (
+              <tr><td colSpan={8} className="p-6 text-center text-gray-500 italic">No violation records yet.</td></tr>
+            )}
+            {violations.map((v) => (
+              <tr key={v.id} className="border-b hover:bg-gray-50 transition">
+                <td className="p-3 font-mono text-sm">{v.recordNo}</td>
+                <td className="p-3">{toLocalDate(v.occurredAt)}</td>
+                <td className="p-3 font-semibold">{v.studentNo}</td>
+                <td className="p-3">{v.studentName}</td>
+                <td className="p-3" title={v.details}>{v.violationType}</td>
+                <td className="p-3"><span className={`px-3 py-1 rounded-full text-xs font-bold ${sevCls(v.severity)}`}>{v.severity}</span></td>
+                <td className="p-3">
+                  {canWrite ? (
+                    <select value={v.status} onChange={(e) => changeStatus(v, e.target.value)} className="p-1 border-2 border-gray-300 rounded-lg text-sm">
+                      {STATUSES.map((s) => <option key={s}>{s}</option>)}
+                    </select>
+                  ) : (
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${statCls(v.status)}`}>{v.status}</span>
+                  )}
+                </td>
+                <td className="p-3">
+                  {canDelete && (
+                    <button onClick={() => remove(v)} title="Delete record" className="text-red-600 hover:text-red-800 transition">
+                      <Trash2 size={18} />
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function StudentsTab({ students, canWrite, reload, notify, onError }) {
+  const blank = { studentNo: '', lastName: '', firstName: '', middleName: '', educationLevel: 'College', yearLevel: '', course: '', section: '', guardianName: '', guardianContact: '' };
+  const [open, setOpen] = useState(false);
+  const [f, setF] = useState(blank);
+  const [saving, setSaving] = useState(false);
+  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await api('/students', { method: 'POST', body: f });
+      notify('Student added', 'success');
+      setF(blank);
+      setOpen(false);
+      reload();
+    } catch (err) {
+      onError(err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const field = (key, label, required, props = {}) => (
+    <div key={key}>
+      <label className={labelCls}>{label}{required ? ' *' : ''}</label>
+      <input type="text" required={required} maxLength={120} value={f[key]} onChange={set(key)} className={inputCls} {...props} />
+    </div>
+  );
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-2xl font-bold text-gray-800">Student Master List</h2>
+        {canWrite && (
+          <button onClick={() => setOpen(!open)} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition">
+            {open ? 'Cancel' : '➕ Add Student'}
+          </button>
+        )}
+      </div>
+
+      {open && (
+        <form onSubmit={submit} className="bg-gray-50 p-6 rounded-xl mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            {field('studentNo', 'Student ID', true)}
+            {field('lastName', 'Last Name', true)}
+            {field('firstName', 'First Name', true)}
+            {field('middleName', 'Middle Name', false)}
+            <div>
+              <label className={labelCls}>Education Level *</label>
+              <select value={f.educationLevel} onChange={set('educationLevel')} className={inputCls}>
+                {LEVELS.map((l) => <option key={l}>{l}</option>)}
+              </select>
+            </div>
+            {field('yearLevel', 'Year / Grade Level', false, { placeholder: 'e.g. 1st Year or Grade 4' })}
+            {field('course', 'Course / Strand', false)}
+            {field('section', 'Section', false)}
+            {field('guardianName', 'Guardian Name', false)}
+            {field('guardianContact', 'Guardian Contact', false)}
+          </div>
+          <button type="submit" disabled={saving} className={btnCls}>{saving ? 'Saving...' : '💾 Save Student'}</button>
+        </form>
+      )}
+
+      <div className="overflow-x-auto rounded-lg shadow">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className={theadCls}>
+              {['Student ID', 'Last Name', 'First Name', 'Level', 'Year Level', 'Course', 'Section', 'Guardian Contact', 'Violations'].map((h) => (
+                <th key={h} className="p-3 text-left">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="bg-white">
+            {students.length === 0 && (
+              <tr><td colSpan={9} className="p-6 text-center text-gray-500 italic">No students yet.</td></tr>
+            )}
+            {students.map((s) => (
+              <tr key={s.id} className="border-b hover:bg-gray-50 transition">
+                <td className="p-3 font-bold text-red-900">{s.studentNo}</td>
+                <td className="p-3">{s.lastName}</td>
+                <td className="p-3">{s.firstName}</td>
+                <td className="p-3">{s.educationLevel}</td>
+                <td className="p-3">{s.yearLevel}</td>
+                <td className="p-3">{s.course}</td>
+                <td className="p-3">{s.section}</td>
+                <td className="p-3">{s.guardianContact}</td>
+                <td className="p-3">
+                  <span className="inline-flex items-center justify-center w-8 h-8 bg-red-100 text-red-900 font-bold rounded-full">{s.violationCount}</span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function UsersTab({ currentUser, notify, onError }) {
+  const [users, setUsers] = useState([]);
+  const [f, setF] = useState({ username: '', fullName: '', role: 'staff', tempPassword: '' });
+  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+
+  const load = useCallback(async () => {
+    try {
+      setUsers((await api('/users')).users);
+    } catch (e) {
+      onError(e);
+    }
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const create = async (e) => {
+    e.preventDefault();
+    try {
+      await api('/users', { method: 'POST', body: f });
+      notify('User created. They must change the password at first login.', 'success');
+      setF({ ...f, username: '', fullName: '', tempPassword: '' });
+      load();
+    } catch (err) {
+      onError(err);
+    }
+  };
+  const patch = async (u, body, message) => {
+    try {
+      await api(`/users/${u.id}`, { method: 'PATCH', body });
+      notify(message, 'success');
+      load();
+    } catch (err) {
+      onError(err);
+    }
+  };
+  const reset = async (u) => {
+    const pw = window.prompt(`Temporary password for ${u.username} (at least 12 characters). They must change it at next login.`);
+    if (!pw) return;
+    try {
+      await api(`/users/${u.id}/reset-password`, { method: 'POST', body: { tempPassword: pw } });
+      notify('Password reset', 'success');
+      load();
+    } catch (err) {
+      onError(err);
+    }
+  };
+
+  return (
+    <div>
+      <h2 className="text-2xl font-bold mb-6 text-gray-800">User Accounts</h2>
+      <form onSubmit={create} className="bg-gray-50 p-6 rounded-xl mb-6">
+        <h3 className="text-lg font-bold text-red-900 mb-4">Add a user</h3>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+          <div>
+            <label className={labelCls}>Username *</label>
+            <input type="text" required autoComplete="off" value={f.username} onChange={set('username')} className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls}>Full name *</label>
+            <input type="text" required value={f.fullName} onChange={set('fullName')} className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls}>Role *</label>
+            <select value={f.role} onChange={set('role')} className={inputCls}>
+              {ROLES.map((r) => <option key={r}>{r}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className={labelCls}>Temporary password *</label>
+            <input type="text" required minLength={12} autoComplete="off" value={f.tempPassword} onChange={set('tempPassword')} className={inputCls} />
+          </div>
+        </div>
+        <button type="submit" className={btnCls}>➕ Create User</button>
+        <p className="text-sm text-gray-600 mt-3">admin: everything · staff: record and edit violations and students · viewer: read only</p>
+      </form>
+
+      <div className="overflow-x-auto rounded-lg shadow">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className={theadCls}>
+              {['Username', 'Full Name', 'Role', 'Status', 'Actions'].map((h) => <th key={h} className="p-3 text-left">{h}</th>)}
+            </tr>
+          </thead>
+          <tbody className="bg-white">
+            {users.map((u) => {
+              const self = u.id === currentUser.id;
+              return (
+                <tr key={u.id} className="border-b hover:bg-gray-50 transition">
+                  <td className="p-3 font-semibold">{u.username}{self ? ' (you)' : ''}</td>
+                  <td className="p-3">{u.fullName}</td>
+                  <td className="p-3">
+                    <select value={u.role} disabled={self} onChange={(e) => patch(u, { role: e.target.value }, 'Role updated')} className="p-1 border-2 border-gray-300 rounded-lg text-sm">
+                      {ROLES.map((r) => <option key={r}>{r}</option>)}
+                    </select>
+                  </td>
+                  <td className="p-3">
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${u.active ? 'bg-green-500 text-white' : 'bg-gray-400 text-white'}`}>{u.active ? 'Active' : 'Disabled'}</span>
+                    {u.mustChangePassword && <span className="ml-2 text-xs text-gray-600">must change password</span>}
+                  </td>
+                  <td className="p-3 space-x-3 whitespace-nowrap">
+                    {!self && (
+                      <button onClick={() => patch(u, { active: !u.active }, u.active ? 'User disabled' : 'User enabled')} className="text-blue-700 underline text-sm">
+                        {u.active ? 'Disable' : 'Enable'}
+                      </button>
+                    )}
+                    <button onClick={() => reset(u)} className="text-blue-700 underline text-sm">Reset password</button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function AuditTab({ onError }) {
+  const [entries, setEntries] = useState([]);
+  useEffect(() => {
+    api('/audit?limit=200').then((d) => setEntries(d.entries)).catch(onError);
+  }, []);
+
+  return (
+    <div>
+      <h2 className="text-2xl font-bold mb-6 text-gray-800">Audit Log (latest 200)</h2>
+      <div className="overflow-x-auto rounded-lg shadow">
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr className={theadCls}>
+              {['When', 'User', 'Action', 'Entity', 'ID', 'Details', 'IP'].map((h) => <th key={h} className="p-3 text-left">{h}</th>)}
+            </tr>
+          </thead>
+          <tbody className="bg-white">
+            {entries.map((a) => (
+              <tr key={a.id} className="border-b hover:bg-gray-50">
+                <td className="p-3 whitespace-nowrap">{new Date(a.createdAt).toLocaleString()}</td>
+                <td className="p-3">{a.username}</td>
+                <td className="p-3 font-mono">{a.action}</td>
+                <td className="p-3">{a.entity}</td>
+                <td className="p-3">{a.entityId}</td>
+                <td className="p-3">{a.details}</td>
+                <td className="p-3">{a.ip}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ---------- main component ----------
 
 const SSCInfractionsSystem = () => {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [currentUser, setCurrentUser] = useState(null);
+  const [auth, setAuth] = useState({ status: 'loading', user: null, mustChange: false });
+  const [loginError, setLoginError] = useState('');
+  const [busy, setBusy] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [students, setStudents] = useState([]);
   const [violations, setViolations] = useState([]);
   const [showAlert, setShowAlert] = useState({ show: false, message: '', type: '' });
-  const [searchStudent, setSearchStudent] = useState('');
-  const [loginForm, setLoginForm] = useState({ username: '', password: '' });
-
-  useEffect(() => {
-    const sampleStudents = [
-      { id: '2024-001', lastName: 'Dela Cruz', firstName: 'Juan', middleName: 'Santos', yearLevel: '1st Year', course: 'BSIT', grade: '1st Year', section: 'A', contact: '09171234567', guardian: 'Maria Dela Cruz' },
-      { id: '2024-002', lastName: 'Santos', firstName: 'Maria', middleName: 'Garcia', yearLevel: '2nd Year', course: 'BSBA', grade: '2nd Year', section: 'B', contact: '09187654321', guardian: 'Pedro Santos' },
-      { id: '2024-003', lastName: 'Reyes', firstName: 'Pedro', middleName: 'Lopez', yearLevel: '3rd Year', course: 'BSCS', grade: '3rd Year', section: 'A', contact: '09191234567', guardian: 'Ana Reyes' }
-    ];
-    setStudents(sampleStudents);
-
-    const sampleViolations = [
-      {
-        id: 1,
-        recordId: '20241022-001',
-        date: '2024-10-22',
-        time: '08:30',
-        studentId: '2024-001',
-        studentName: 'Dela Cruz, Juan',
-        yearLevel: '1st Year',
-        course: 'BSIT',
-        violationType: 'Tardiness',
-        violationDetails: 'Student arrived 30 minutes late without valid excuse',
-        severity: 'Minor',
-        sanction: 'Verbal Warning',
-        status: 'Resolved',
-        recordedBy: 'Admin',
-        remarks: 'First offense'
-      },
-      {
-        id: 2,
-        recordId: '20241020-002',
-        date: '2024-10-20',
-        time: '14:15',
-        studentId: '2024-002',
-        studentName: 'Santos, Maria',
-        yearLevel: '2nd Year',
-        course: 'BSBA',
-        violationType: 'Uniform Violation',
-        violationDetails: 'Not wearing proper school ID',
-        severity: 'Minor',
-        sanction: 'Written Warning',
-        status: 'Pending',
-        recordedBy: 'Admin',
-        remarks: 'Second offense this month'
-      }
-    ];
-    setViolations(sampleViolations);
-  }, []);
-
-  const handleLogin = () => {
-    if (loginForm.username === 'admin' && loginForm.password === 'admin123') {
-      setCurrentUser({ username: 'admin', fullName: 'Administrator' });
-      setIsLoggedIn(true);
-      displayAlert('Login successful!', 'success');
-    } else {
-      displayAlert('Invalid username or password', 'error');
-    }
-  };
-
-  const handleLogout = () => {
-    setIsLoggedIn(false);
-    setCurrentUser(null);
-    setActiveTab('dashboard');
-  };
 
   const displayAlert = (message, type) => {
     setShowAlert({ show: true, message, type });
-    setTimeout(() => setShowAlert({ show: false, message: '', type: '' }), 3000);
+    setTimeout(() => setShowAlert({ show: false, message: '', type: '' }), 3500);
   };
 
-  const stats = {
-    total: violations.length,
-    pending: violations.filter(v => v.status === 'Pending').length,
-    thisMonth: violations.filter(v => {
-      const vDate = new Date(v.date);
-      const now = new Date();
-      return vDate.getMonth() === now.getMonth() && vDate.getFullYear() === now.getFullYear();
-    }).length,
-    critical: violations.filter(v => v.severity === 'Critical').length
+  const handleError = (e) => {
+    if (e.status === 401) {
+      setAuth({ status: 'out', user: null, mustChange: false });
+      setLoginError('Your session has ended. Please sign in again.');
+    } else if (e.status === 403 && /change your password/i.test(e.message)) {
+      setAuth((a) => ({ ...a, mustChange: true }));
+    } else {
+      displayAlert(e.message || 'Something went wrong', 'error');
+    }
   };
 
-  const SchoolLogo = () => (
-    <svg className="w-20 h-20 bg-white rounded-full p-2 shadow-lg" viewBox="0 0 200 200">
-      <circle cx="100" cy="100" r="95" fill="#8B0000" stroke="#DAA520" strokeWidth="3"/>
-      <circle cx="100" cy="100" r="80" fill="white"/>
-      <text x="100" y="80" fontFamily="serif" fontSize="32" fontWeight="bold" fill="#8B0000" textAnchor="middle">SSC</text>
-      <text x="100" y="110" fontFamily="serif" fontSize="16" fontWeight="bold" fill="#8B0000" textAnchor="middle">RECOLETOS</text>
-      <path d="M100 35 L95 40 Q85 45 85 55 Q85 65 100 75 Q115 65 115 55 Q115 45 105 40 Z" fill="#DC143C"/>
-      <path d="M75 130 L75 145 Q75 150 100 148 Q125 150 125 145 L125 130 Q125 125 100 127 Q75 125 75 130 Z" fill="#8B0000"/>
-      <line x1="100" y1="130" x2="100" y2="148" stroke="white" strokeWidth="2"/>
-      <text x="100" y="170" fontFamily="serif" fontSize="12" fontWeight="bold" fill="#8B0000" textAnchor="middle">MANILA • 1941</text>
-      <path d="M40 100 L35 95 L40 90 L45 95 Z" fill="#DAA520"/>
-      <path d="M160 100 L155 95 L160 90 L165 95 Z" fill="#DAA520"/>
-    </svg>
-  );
+  useEffect(() => {
+    api('/auth/me')
+      .then(({ user }) => setAuth({ status: 'in', user, mustChange: user.mustChangePassword }))
+      .catch(() => setAuth({ status: 'out', user: null, mustChange: false }));
+  }, []);
 
-  if (!isLoggedIn) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-red-900 to-yellow-600 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md animate-fadeIn">
-          <div className="text-center mb-6">
-            <h1 className="text-3xl font-bold text-red-900 mb-2">🔐 Sign In</h1>
-            <p className="font-semibold text-lg text-red-900">San Sebastian College-Recoletos, Manila</p>
-            <p className="text-gray-600 font-medium">Office of Student Affairs and Services</p>
-            <p className="text-gray-700 mt-2">Student Infractions Tracking System</p>
+  const loadData = useCallback(async () => {
+    try {
+      const [s, v] = await Promise.all([api('/students'), api('/violations')]);
+      setStudents(s.students);
+      setViolations(v.violations);
+    } catch (e) {
+      handleError(e);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (auth.status === 'in' && !auth.mustChange) loadData();
+  }, [auth.status, auth.mustChange, loadData]);
+
+  const handleLogin = async (username, password) => {
+    setBusy(true);
+    setLoginError('');
+    try {
+      const data = await api('/auth/login', { method: 'POST', body: { username, password } });
+      setAuth({ status: 'in', user: data.user, mustChange: data.mustChangePassword });
+    } catch (e) {
+      setLoginError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleChangePassword = async (currentPassword, newPassword) => {
+    await api('/auth/change-password', { method: 'POST', body: { currentPassword, newPassword } });
+    setAuth((a) => ({ ...a, mustChange: false }));
+    displayAlert('Password changed.', 'success');
+  };
+
+  const handleLogout = async () => {
+    try {
+      await api('/auth/logout', { method: 'POST' });
+    } catch {
+      /* already logged out */
+    }
+    setAuth({ status: 'out', user: null, mustChange: false });
+    setStudents([]);
+    setViolations([]);
+    setActiveTab('dashboard');
+    setLoginError('');
+  };
+
+  const user = auth.user;
+  const canWrite = user && (user.role === 'admin' || user.role === 'staff');
+  const isAdmin = user && user.role === 'admin';
+
+  let screen;
+  if (auth.status === 'loading') {
+    screen = <div className="min-h-screen bg-gradient-to-br from-red-900 to-yellow-600 flex items-center justify-center text-white text-lg">Loading...</div>;
+  } else if (auth.status === 'out') {
+    screen = <LoginScreen onLogin={handleLogin} error={loginError} busy={busy} />;
+  } else if (auth.mustChange) {
+    screen = <ChangePasswordScreen user={user} onSubmit={handleChangePassword} onLogout={handleLogout} />;
+  } else {
+    const tabs = [
+      { id: 'dashboard', label: '📊 Dashboard' },
+      ...(canWrite ? [{ id: 'violations', label: '⚠️ Record Violation' }] : []),
+      { id: 'log', label: '📜 Violations Log' },
+      { id: 'students', label: '👥 Student Master List' },
+      ...(isAdmin ? [{ id: 'users', label: '👤 Users' }, { id: 'audit', label: '🧾 Audit Log' }] : []),
+    ];
+    screen = (
+      <div className="min-h-screen bg-gradient-to-br from-red-900 to-yellow-600 p-4">
+        <div className="max-w-7xl mx-auto bg-white rounded-2xl shadow-2xl overflow-hidden">
+          <div className="bg-gradient-to-r from-red-900 to-yellow-600 text-white p-6">
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-4">
+                <SchoolLogo />
+                <div>
+                  <h1 className="text-3xl font-bold mb-1">📋 Student Infractions Tracking System</h1>
+                  <p className="text-sm font-medium opacity-95">San Sebastian College-Recoletos, Manila</p>
+                  <p className="text-sm opacity-90">Office of Student Affairs and Services</p>
+                  <p className="text-xs mt-2 flex items-center gap-2">
+                    <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+                    Connected to server • Changes are saved to the database
+                  </p>
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-lg font-semibold">{user.fullName}</div>
+                <div className="text-sm opacity-80 mb-2">Role: {user.role}</div>
+                <button onClick={handleLogout} className="bg-white/20 border-2 border-white text-white px-4 py-2 rounded-lg font-semibold hover:bg-white hover:text-red-900 transition">
+                  Logout
+                </button>
+              </div>
+            </div>
           </div>
-          
-          {showAlert.show && (
-            <div className={`mb-4 p-3 rounded ${showAlert.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-              {showAlert.message}
-            </div>
-          )}
 
-          <div className="space-y-4">
-            <div>
-              <label className="block font-semibold mb-2 text-gray-700">Username</label>
-              <input
-                type="text"
-                value={loginForm.username}
-                onChange={(e) => setLoginForm({...loginForm, username: e.target.value})}
-                className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-red-900 focus:outline-none"
-              />
-            </div>
-            <div>
-              <label className="block font-semibold mb-2 text-gray-700">Password</label>
-              <input
-                type="password"
-                value={loginForm.password}
-                onChange={(e) => setLoginForm({...loginForm, password: e.target.value})}
-                onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
-                className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-red-900 focus:outline-none"
-              />
-            </div>
-            <button 
-              onClick={handleLogin}
-              className="w-full bg-gradient-to-r from-red-900 to-yellow-600 text-white font-bold py-3 rounded-lg hover:shadow-lg transition transform hover:-translate-y-1"
-            >
-              Sign In
-            </button>
+          <div className="flex bg-gray-100 border-b-2 border-gray-300 overflow-x-auto">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-6 py-4 font-semibold transition whitespace-nowrap ${
+                  activeTab === tab.id ? 'bg-white text-red-900 border-b-4 border-red-900' : 'text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
 
-          <div className="mt-4 p-4 bg-blue-50 rounded-lg text-sm">
-            <strong>Default Login:</strong><br/>
-            Username: <code className="bg-white px-2 py-1 rounded">admin</code><br/>
-            Password: <code className="bg-white px-2 py-1 rounded">admin123</code>
+          <div className="p-6">
+            {activeTab === 'dashboard' && <Dashboard violations={violations} students={students} />}
+            {activeTab === 'violations' && canWrite && (
+              <RecordForm students={students} onSaved={loadData} notify={displayAlert} onError={handleError} />
+            )}
+            {activeTab === 'log' && (
+              <ViolationsLog violations={violations} canWrite={canWrite} canDelete={isAdmin} reload={loadData} notify={displayAlert} onError={handleError} />
+            )}
+            {activeTab === 'students' && (
+              <StudentsTab students={students} canWrite={canWrite} reload={loadData} notify={displayAlert} onError={handleError} />
+            )}
+            {activeTab === 'users' && isAdmin && <UsersTab currentUser={user} notify={displayAlert} onError={handleError} />}
+            {activeTab === 'audit' && isAdmin && <AuditTab onError={handleError} />}
           </div>
         </div>
       </div>
@@ -161,330 +848,16 @@ const SSCInfractionsSystem = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-red-900 to-yellow-600 p-4">
-      <div className="max-w-7xl mx-auto bg-white rounded-2xl shadow-2xl overflow-hidden">
-        <div className="bg-gradient-to-r from-red-900 to-yellow-600 text-white p-6">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-4">
-              <SchoolLogo />
-              <div>
-                <h1 className="text-3xl font-bold mb-1">📋 Student Infractions Tracking System</h1>
-                <p className="text-sm font-medium opacity-95">San Sebastian College-Recoletos, Manila</p>
-                <p className="text-sm opacity-90">Office of Student Affairs and Services</p>
-                <p className="text-xs mt-2 flex items-center gap-2">
-                  <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
-                  Real-time Updates • Auto-Save Enabled
-                </p>
-              </div>
-            </div>
-            <div className="text-right">
-              <div className="text-lg font-semibold">{currentUser?.fullName}</div>
-              <div className="text-sm opacity-80 mb-2">Logged In</div>
-              <button 
-                onClick={handleLogout}
-                className="bg-white/20 border-2 border-white text-white px-4 py-2 rounded-lg font-semibold hover:bg-white hover:text-red-900 transition"
-              >
-                Logout
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex bg-gray-100 border-b-2 border-gray-300 overflow-x-auto">
-          {[
-            { id: 'dashboard', label: '📊 Dashboard' },
-            { id: 'violations', label: '⚠️ Record Violation' },
-            { id: 'log', label: '📜 Violations Log' },
-            { id: 'students', label: '👥 Student Master List' }
-          ].map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`px-6 py-4 font-semibold transition whitespace-nowrap ${
-                activeTab === tab.id 
-                  ? 'bg-white text-red-900 border-b-4 border-red-900' 
-                  : 'text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="p-6">
-          {activeTab === 'dashboard' && (
-            <div>
-              <h2 className="text-2xl font-bold mb-6 text-gray-800">Dashboard Overview</h2>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                <div className="bg-gradient-to-br from-red-900 to-yellow-600 text-white p-6 rounded-xl shadow-lg transform hover:scale-105 transition">
-                  <h4 className="text-sm opacity-90 mb-2">TOTAL VIOLATIONS</h4>
-                  <div className="text-5xl font-bold">{stats.total}</div>
-                </div>
-                <div className="bg-gradient-to-br from-red-900 to-yellow-600 text-white p-6 rounded-xl shadow-lg transform hover:scale-105 transition">
-                  <h4 className="text-sm opacity-90 mb-2">PENDING CASES</h4>
-                  <div className="text-5xl font-bold">{stats.pending}</div>
-                </div>
-                <div className="bg-gradient-to-br from-red-900 to-yellow-600 text-white p-6 rounded-xl shadow-lg transform hover:scale-105 transition">
-                  <h4 className="text-sm opacity-90 mb-2">THIS MONTH</h4>
-                  <div className="text-5xl font-bold">{stats.thisMonth}</div>
-                </div>
-                <div className="bg-gradient-to-br from-red-900 to-yellow-600 text-white p-6 rounded-xl shadow-lg transform hover:scale-105 transition">
-                  <h4 className="text-sm opacity-90 mb-2">CRITICAL CASES</h4>
-                  <div className="text-5xl font-bold">{stats.critical}</div>
-                </div>
-              </div>
-
-              <div className="bg-gray-50 p-6 rounded-xl">
-                <h3 className="text-xl font-bold text-red-900 mb-4">🔍 Student Violation History</h3>
-                <div className="mb-4">
-                  <input
-                    type="text"
-                    placeholder="Enter Student ID to view history..."
-                    value={searchStudent}
-                    onChange={(e) => setSearchStudent(e.target.value)}
-                    className="w-full max-w-md p-3 border-2 border-gray-300 rounded-lg focus:border-red-900 focus:outline-none"
-                  />
-                </div>
-                {searchStudent ? (
-                  violations.filter(v => v.studentId === searchStudent).length > 0 ? (
-                    <div className="mt-4">
-                      <div className="bg-blue-100 p-4 rounded-lg mb-4">
-                        <h4 className="font-bold text-blue-900 mb-2">Student Information</h4>
-                        <p><strong>ID:</strong> {searchStudent}</p>
-                        <p><strong>Total Violations:</strong> {violations.filter(v => v.studentId === searchStudent).length}</p>
-                      </div>
-                      <div className="overflow-x-auto">
-                        <table className="w-full border-collapse">
-                          <thead>
-                            <tr className="bg-gray-200">
-                              <th className="p-2 text-left">Date</th>
-                              <th className="p-2 text-left">Violation</th>
-                              <th className="p-2 text-left">Severity</th>
-                              <th className="p-2 text-left">Status</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {violations.filter(v => v.studentId === searchStudent).map(v => (
-                              <tr key={v.id} className="border-b">
-                                <td className="p-2">{v.date}</td>
-                                <td className="p-2">{v.violationType}</td>
-                                <td className="p-2">
-                                  <span className={`px-2 py-1 rounded text-xs font-bold ${
-                                    v.severity === 'Minor' ? 'bg-yellow-200' : v.severity === 'Major' ? 'bg-orange-200' : 'bg-red-200'
-                                  }`}>
-                                    {v.severity}
-                                  </span>
-                                </td>
-                                <td className="p-2">
-                                  <span className={`px-2 py-1 rounded text-xs font-bold ${
-                                    v.status === 'Resolved' ? 'bg-green-200' : 'bg-yellow-200'
-                                  }`}>
-                                    {v.status}
-                                  </span>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="bg-green-100 p-4 rounded-lg text-green-800">
-                      Student ID {searchStudent} has no violation records.
-                    </div>
-                  )
-                ) : (
-                  <div className="text-gray-500 italic text-center p-8">
-                    Enter a Student ID to view their violation history
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'violations' && (
-            <div className="bg-gray-50 p-6 rounded-xl">
-              <h3 className="text-xl font-bold text-red-900 mb-6">Record New Violation</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                <div>
-                  <label className="block font-semibold mb-2 text-gray-700">Date *</label>
-                  <input type="date" defaultValue={new Date().toISOString().split('T')[0]} className="w-full p-2 border-2 border-gray-300 rounded-lg focus:border-red-900 focus:outline-none" />
-                </div>
-                <div>
-                  <label className="block font-semibold mb-2 text-gray-700">Time *</label>
-                  <input type="time" className="w-full p-2 border-2 border-gray-300 rounded-lg focus:border-red-900 focus:outline-none" />
-                </div>
-                <div>
-                  <label className="block font-semibold mb-2 text-gray-700">Student ID *</label>
-                  <input type="text" placeholder="Enter Student ID" className="w-full p-2 border-2 border-gray-300 rounded-lg focus:border-red-900 focus:outline-none" />
-                </div>
-                <div>
-                  <label className="block font-semibold mb-2 text-gray-700">Violation Type *</label>
-                  <select className="w-full p-2 border-2 border-gray-300 rounded-lg focus:border-red-900 focus:outline-none">
-                    <option>Select violation type...</option>
-                    <option>Tardiness</option>
-                    <option>Uniform Violation</option>
-                    <option>Behavioral Misconduct</option>
-                    <option>Academic Dishonesty</option>
-                    <option>Bullying/Harassment</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block font-semibold mb-2 text-gray-700">Severity *</label>
-                  <select className="w-full p-2 border-2 border-gray-300 rounded-lg focus:border-red-900 focus:outline-none">
-                    <option>Minor</option>
-                    <option>Major</option>
-                    <option>Critical</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block font-semibold mb-2 text-gray-700">Status *</label>
-                  <select className="w-full p-2 border-2 border-gray-300 rounded-lg focus:border-red-900 focus:outline-none">
-                    <option>Pending</option>
-                    <option>Ongoing</option>
-                    <option>Resolved</option>
-                    <option>Dismissed</option>
-                  </select>
-                </div>
-              </div>
-              <div className="mb-4">
-                <label className="block font-semibold mb-2 text-gray-700">Violation Details *</label>
-                <textarea rows="3" placeholder="Describe the violation in detail..." className="w-full p-2 border-2 border-gray-300 rounded-lg focus:border-red-900 focus:outline-none"></textarea>
-              </div>
-              <div className="mb-4">
-                <label className="block font-semibold mb-2 text-gray-700">Remarks/Notes</label>
-                <textarea rows="2" placeholder="Additional remarks..." className="w-full p-2 border-2 border-gray-300 rounded-lg focus:border-red-900 focus:outline-none"></textarea>
-              </div>
-              <button 
-                onClick={() => displayAlert('Violation record saved successfully!', 'success')}
-                className="bg-gradient-to-r from-red-900 to-yellow-600 text-white font-bold px-6 py-3 rounded-lg hover:shadow-lg transition transform hover:-translate-y-1"
-              >
-                💾 Save Violation Record
-              </button>
-            </div>
-          )}
-
-          {activeTab === 'log' && (
-            <div>
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold text-gray-800">Violations Log</h2>
-                <div className="flex gap-2">
-                  <button className="bg-green-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-green-700 transition">
-                    <Printer size={18} /> Print
-                  </button>
-                  <button className="bg-green-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-green-700 transition">
-                    <Download size={18} /> Export
-                  </button>
-                </div>
-              </div>
-              
-              <div className="overflow-x-auto rounded-lg shadow">
-                <table className="w-full border-collapse">
-                  <thead>
-                    <tr className="bg-gradient-to-r from-red-900 to-yellow-600 text-white">
-                      <th className="p-3 text-left">Record ID</th>
-                      <th className="p-3 text-left">Date</th>
-                      <th className="p-3 text-left">Student ID</th>
-                      <th className="p-3 text-left">Student Name</th>
-                      <th className="p-3 text-left">Violation</th>
-                      <th className="p-3 text-left">Severity</th>
-                      <th className="p-3 text-left">Status</th>
-                      <th className="p-3 text-left">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white">
-                    {violations.map((v) => (
-                      <tr key={v.id} className="border-b hover:bg-gray-50 transition">
-                        <td className="p-3 font-mono text-sm">{v.recordId}</td>
-                        <td className="p-3">{v.date}</td>
-                        <td className="p-3 font-semibold">{v.studentId}</td>
-                        <td className="p-3">{v.studentName}</td>
-                        <td className="p-3">{v.violationType}</td>
-                        <td className="p-3">
-                          <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                            v.severity === 'Minor' ? 'bg-yellow-200 text-yellow-800' :
-                            v.severity === 'Major' ? 'bg-orange-300 text-orange-900' :
-                            'bg-red-500 text-white'
-                          }`}>
-                            {v.severity}
-                          </span>
-                        </td>
-                        <td className="p-3">
-                          <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                            v.status === 'Resolved' ? 'bg-green-500 text-white' :
-                            v.status === 'Pending' ? 'bg-yellow-400 text-yellow-900' :
-                            'bg-blue-500 text-white'
-                          }`}>
-                            {v.status}
-                          </span>
-                        </td>
-                        <td className="p-3">
-                          <button className="text-red-600 hover:text-red-800 transition">
-                            <Trash2 size={18} />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'students' && (
-            <div>
-              <h2 className="text-2xl font-bold mb-6 text-gray-800">Student Master List</h2>
-              
-              <div className="overflow-x-auto rounded-lg shadow">
-                <table className="w-full border-collapse">
-                  <thead>
-                    <tr className="bg-gradient-to-r from-red-900 to-yellow-600 text-white">
-                      <th className="p-3 text-left">Student ID</th>
-                      <th className="p-3 text-left">Last Name</th>
-                      <th className="p-3 text-left">First Name</th>
-                      <th className="p-3 text-left">Year Level</th>
-                      <th className="p-3 text-left">Course</th>
-                      <th className="p-3 text-left">Section</th>
-                      <th className="p-3 text-left">Contact</th>
-                      <th className="p-3 text-left">Violations</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white">
-                    {students.map((s) => (
-                      <tr key={s.id} className="border-b hover:bg-gray-50 transition">
-                        <td className="p-3 font-bold text-red-900">{s.id}</td>
-                        <td className="p-3">{s.lastName}</td>
-                        <td className="p-3">{s.firstName}</td>
-                        <td className="p-3">{s.yearLevel}</td>
-                        <td className="p-3">{s.course}</td>
-                        <td className="p-3">{s.section}</td>
-                        <td className="p-3">{s.contact}</td>
-                        <td className="p-3">
-                          <span className="inline-flex items-center justify-center w-8 h-8 bg-red-100 text-red-900 font-bold rounded-full">
-                            {violations.filter(v => v.studentId === s.id).length}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
+    <>
+      {screen}
       {showAlert.show && (
-        <div className="fixed bottom-4 right-4 z-50 animate-fadeIn">
-          <div className={`p-4 rounded-lg shadow-lg ${
-            showAlert.type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
-          }`}>
+        <div className="fixed bottom-4 right-4 z-50">
+          <div className={`p-4 rounded-lg shadow-lg ${showAlert.type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}>
             {showAlert.message}
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 };
 
