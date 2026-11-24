@@ -47,7 +47,7 @@ router.get('/', asyncHandler(async (req, res) => {
     `${SELECT}
      WHERE ($1::text IS NULL OR s.student_no ILIKE $1 OR s.last_name ILIKE $1 OR s.first_name ILIKE $1)
      ORDER BY s.last_name, s.first_name
-     LIMIT 500`,
+     LIMIT 10000`,
     [pattern]
   );
   res.json({ students: rows });
@@ -167,6 +167,31 @@ router.post('/import', requireRole('admin', 'staff'), asyncHandler(async (req, r
   await audit(req, 'STUDENT_IMPORT', 'student', null,
     `created ${created}, updated ${updated}, skipped ${skipped}, problems ${prepared.invalid.length}`);
   res.json({ dryRun: false, ...summary, created, updated, skipped });
+}));
+
+// Deletes every student who has NO violation records. Students that still have records are kept,
+// so discipline history is never lost. The caller must send { confirm: 'DELETE ALL' }.
+router.post('/delete-all', requireRole('admin', 'staff'), asyncHandler(async (req, res) => {
+  if (!req.body || req.body.confirm !== 'DELETE ALL') {
+    return res.status(400).json({ error: 'Confirmation text is missing or incorrect' });
+  }
+  try {
+    const del = await pool.query(
+      `DELETE FROM students s
+       WHERE NOT EXISTS (SELECT 1 FROM violations v WHERE v.student_id = s.id)`
+    );
+    const left = await pool.query('SELECT COUNT(*)::int AS n FROM students');
+    const deleted = del.rowCount;
+    const kept = left.rows[0].n;
+    await audit(req, 'STUDENTS_DELETED_ALL', 'student', null,
+      `deleted ${deleted}, kept ${kept} (have violation records)`);
+    res.json({ deleted, kept });
+  } catch (err) {
+    if (err.code === '23503') {
+      return res.status(409).json({ error: 'A violation was recorded while deleting. Please try again.' });
+    }
+    throw err;
+  }
 }));
 
 router.put('/:id', requireRole('admin', 'staff'), asyncHandler(async (req, res) => {

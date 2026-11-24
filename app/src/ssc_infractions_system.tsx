@@ -603,10 +603,84 @@ function ImportPanel({ reload, notify, onError, onClose }) {
   );
 }
 
+function DeleteAllStudents({ students, reload, notify, onError }) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const withRecords = students.filter((s) => s.violationCount > 0).length;
+  const deletable = students.length - withRecords;
+  const close = () => { setOpen(false); setText(''); };
+
+  const run = async () => {
+    setBusy(true);
+    try {
+      const r = await api('/students/delete-all', { method: 'POST', body: { confirm: 'DELETE ALL' } });
+      notify(`Deleted ${r.deleted} student(s).${r.kept ? ` ${r.kept} kept because they have violation records.` : ''}`, 'success');
+      close();
+      reload();
+    } catch (err) {
+      onError(err);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="mt-16 pt-6 border-t-2 border-dashed border-red-300">
+      {!open ? (
+        <button onClick={() => setOpen(true)} className="text-red-700 border-2 border-red-300 px-4 py-2 rounded-lg hover:bg-red-50 transition text-sm">
+          🗑️ Delete All Students...
+        </button>
+      ) : (
+        <div className="max-w-2xl bg-red-50 border-2 border-red-400 rounded-xl p-6">
+          <h3 className="text-lg font-bold text-red-800 mb-3">⚠️ Delete the entire Student Master List?</h3>
+          {deletable === 0 ? (
+            <p className="mb-4 text-gray-800">Nothing can be deleted: every student here has violation records. Delete those records in the Violations Log first.</p>
+          ) : (
+            <>
+              <p className="mb-2 text-gray-800">
+                This will permanently delete <strong>{deletable}</strong> student(s). It <strong>cannot be undone</strong>.
+              </p>
+              {withRecords > 0 && (
+                <p className="mb-2 text-gray-800">
+                  <strong>{withRecords}</strong> student(s) who have violation records will be <strong>kept</strong>, so discipline history is never lost.
+                </p>
+              )}
+              <p className="mb-4 text-sm text-gray-600">Tip: ask IT for a database backup first if this list is not easy to import again.</p>
+              <label className={labelCls}>Type <span className="font-mono font-bold">DELETE ALL</span> to confirm</label>
+              <input
+                type="text"
+                autoFocus
+                autoComplete="off"
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                className={inputCls + ' mb-4'}
+              />
+            </>
+          )}
+          <div className="flex gap-3">
+            {deletable > 0 && (
+              <button
+                onClick={run}
+                disabled={text !== 'DELETE ALL' || busy}
+                className="bg-red-700 text-white font-bold px-5 py-2 rounded-lg hover:bg-red-800 transition disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {busy ? 'Deleting...' : `Delete ${deletable} student(s)`}
+              </button>
+            )}
+            <button onClick={close} disabled={busy} className="px-5 py-2 rounded-lg border-2 border-gray-300 hover:bg-gray-100 transition">Cancel</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function StudentsTab({ students, canWrite, reload, notify, onError }) {
   const blank = { studentNo: '', lastName: '', firstName: '', middleName: '', educationLevel: 'College', yearLevel: '', course: '', section: '', guardianName: '', guardianContact: '' };
   const [open, setOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [filter, setFilter] = useState('');
   const [f, setF] = useState(blank);
   const [saving, setSaving] = useState(false);
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
@@ -641,6 +715,12 @@ function StudentsTab({ students, canWrite, reload, notify, onError }) {
       onError(err);
     }
   };
+
+  const q = filter.trim().toLowerCase();
+  const shown = q
+    ? students.filter((s) => [s.studentNo, s.lastName, s.firstName, s.course, s.section].some((v) => String(v || '').toLowerCase().includes(q)))
+    : students;
+  const visible = shown.slice(0, 200); // keeps the page fast with thousands of students
 
   const field = (key, label, required, props = {}) => (
     <div key={key}>
@@ -692,6 +772,19 @@ function StudentsTab({ students, canWrite, reload, notify, onError }) {
         </form>
       )}
 
+      <div className="mb-4">
+        <input
+          type="text"
+          placeholder="Search by Student ID, name, course or section..."
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          className="w-full max-w-md p-3 border-2 border-gray-300 rounded-lg focus:border-red-900 focus:outline-none"
+        />
+        <span className="ml-3 text-sm text-gray-600">
+          {shown.length > visible.length ? `Showing first ${visible.length} of ${shown.length}. Type to narrow the list.` : `${shown.length} student(s)`}
+        </span>
+      </div>
+
       <div className="overflow-x-auto rounded-lg shadow">
         <table className="w-full border-collapse">
           <thead>
@@ -702,10 +795,10 @@ function StudentsTab({ students, canWrite, reload, notify, onError }) {
             </tr>
           </thead>
           <tbody className="bg-white">
-            {students.length === 0 && (
-              <tr><td colSpan={10} className="p-6 text-center text-gray-500 italic">No students yet.</td></tr>
+            {shown.length === 0 && (
+              <tr><td colSpan={10} className="p-6 text-center text-gray-500 italic">{students.length === 0 ? 'No students yet.' : 'No students match your search.'}</td></tr>
             )}
-            {students.map((s) => (
+            {visible.map((s) => (
               <tr key={s.id} className="border-b hover:bg-gray-50 transition">
                 <td className="p-3 font-bold text-red-900">{s.studentNo}</td>
                 <td className="p-3">{s.lastName}</td>
@@ -734,6 +827,10 @@ function StudentsTab({ students, canWrite, reload, notify, onError }) {
           </tbody>
         </table>
       </div>
+
+      {canWrite && students.length > 0 && (
+        <DeleteAllStudents students={students} reload={reload} notify={notify} onError={onError} />
+      )}
     </div>
   );
 }
