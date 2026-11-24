@@ -75,22 +75,14 @@ function exportCsv(rows) {
 }
 
 const SchoolLogo = () => (
-  <svg className="w-20 h-20 bg-white rounded-full p-2 shadow-lg" viewBox="0 0 200 200">
-    <circle cx="100" cy="100" r="95" fill="#8B0000" stroke="#DAA520" strokeWidth="3" />
-    <circle cx="100" cy="100" r="80" fill="white" />
-    <text x="100" y="80" fontFamily="serif" fontSize="32" fontWeight="bold" fill="#8B0000" textAnchor="middle">SSC</text>
-    <text x="100" y="110" fontFamily="serif" fontSize="16" fontWeight="bold" fill="#8B0000" textAnchor="middle">RECOLETOS</text>
-    <path d="M100 35 L95 40 Q85 45 85 55 Q85 65 100 75 Q115 65 115 55 Q115 45 105 40 Z" fill="#DC143C" />
-    <path d="M75 130 L75 145 Q75 150 100 148 Q125 150 125 145 L125 130 Q125 125 100 127 Q75 125 75 130 Z" fill="#8B0000" />
-    <line x1="100" y1="130" x2="100" y2="148" stroke="white" strokeWidth="2" />
-    <text x="100" y="170" fontFamily="serif" fontSize="12" fontWeight="bold" fill="#8B0000" textAnchor="middle">MANILA • 1941</text>
-    <path d="M40 100 L35 95 L40 90 L45 95 Z" fill="#DAA520" />
-    <path d="M160 100 L155 95 L160 90 L165 95 Z" fill="#DAA520" />
-  </svg>
+  <div className="bg-white rounded-2xl p-2 shadow-lg">
+    <img src="/ssc-logo.png" alt="San Sebastian College-Recoletos seal" className="w-24 h-auto block" />
+  </div>
 );
 
 const Header = ({ title, children }) => (
   <div className="text-center mb-6">
+    <img src="/ssc-logo.png" alt="San Sebastian College-Recoletos seal" className="w-28 h-auto mx-auto mb-4" />
     <h1 className="text-3xl font-bold text-red-900 mb-2">{title}</h1>
     <p className="font-semibold text-lg text-red-900">San Sebastian College-Recoletos, Manila</p>
     <p className="text-gray-600 font-medium">Office of Student Affairs and Services</p>
