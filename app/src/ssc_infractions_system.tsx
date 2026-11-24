@@ -11,7 +11,7 @@ const LEVELS = ['Grade School', 'Junior High', 'Senior High', 'College'];
 const inputCls = 'w-full p-2 border-2 border-gray-300 rounded-lg focus:border-red-900 focus:outline-none';
 const bigInputCls = 'w-full p-3 border-2 border-gray-300 rounded-lg focus:border-red-900 focus:outline-none';
 const labelCls = 'block font-semibold mb-2 text-gray-700';
-const btnCls = 'bg-gradient-to-r from-red-900 to-yellow-600 text-white font-bold px-6 py-3 rounded-lg hover:shadow-lg transition disabled:opacity-60';
+const btnCls = 'w-full sm:w-auto bg-gradient-to-r from-red-900 to-yellow-600 text-white font-bold px-6 py-3 rounded-lg hover:shadow-lg transition disabled:opacity-60';
 const theadCls = 'bg-gradient-to-r from-red-900 to-yellow-600 text-white';
 
 const sevCls = (s) => (s === 'Minor' ? 'bg-yellow-200 text-yellow-800' : s === 'Major' ? 'bg-orange-300 text-orange-900' : 'bg-red-500 text-white');
@@ -75,14 +75,14 @@ function exportCsv(rows) {
 }
 
 const SchoolLogo = () => (
-  <img src="/ssc-logo.png" alt="San Sebastian College-Recoletos seal" className="w-28 h-auto block drop-shadow-xl" />
+  <img src="/ssc-logo.png" alt="San Sebastian College-Recoletos seal" className="w-16 sm:w-20 md:w-28 h-auto block shrink-0 drop-shadow-xl" />
 );
 
 const Header = ({ title, children }) => (
   <div className="text-center mb-6">
-    <img src="/ssc-logo.png" alt="San Sebastian College-Recoletos seal" className="w-28 h-auto mx-auto mb-4" />
-    <h1 className="text-3xl font-bold text-red-900 mb-2">{title}</h1>
-    <p className="font-semibold text-lg text-red-900">San Sebastian College-Recoletos, Manila</p>
+    <img src="/ssc-logo.png" alt="San Sebastian College-Recoletos seal" className="w-20 sm:w-28 h-auto mx-auto mb-3 sm:mb-4" />
+    <h1 className="text-2xl sm:text-3xl font-bold text-red-900 mb-2">{title}</h1>
+    <p className="font-semibold text-base sm:text-lg text-red-900">San Sebastian College-Recoletos, Manila</p>
     <p className="text-gray-600 font-medium">Office of Student Affairs and Services</p>
     {children}
   </div>
@@ -93,8 +93,8 @@ const Header = ({ title, children }) => (
 function LoginScreen({ onLogin, error, busy, usernameOnly }) {
   const [form, setForm] = useState({ username: '', password: '' });
   return (
-    <div className="min-h-screen bg-gradient-to-br from-red-900 to-yellow-600 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
+    <div className="min-h-dvh bg-gradient-to-br from-red-900 to-yellow-600 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl p-5 sm:p-8 w-full max-w-md">
         <Header title="🔐 Sign In">
           <p className="text-gray-700 mt-2">Student Infractions Tracking System</p>
         </Header>
@@ -144,8 +144,8 @@ function ChangePasswordScreen({ user, onSubmit, onLogout }) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-red-900 to-yellow-600 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
+    <div className="min-h-dvh bg-gradient-to-br from-red-900 to-yellow-600 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl p-5 sm:p-8 w-full max-w-md">
         <Header title="🔑 Set a New Password">
           <p className="text-gray-700 mt-2">Hello, {user?.fullName}. You must replace your temporary password before continuing.</p>
         </Header>
@@ -193,22 +193,22 @@ function Dashboard({ violations, students }) {
 
   return (
     <div>
-      <h2 className="text-2xl font-bold mb-6 text-gray-800">Dashboard Overview</h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <h2 className="text-xl sm:text-2xl font-bold mb-6 text-gray-800">Dashboard Overview</h2>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
         {[
           ['TOTAL VIOLATIONS', stats.total],
           ['PENDING CASES', stats.pending],
           ['THIS MONTH', stats.thisMonth],
           ['CRITICAL CASES', stats.critical],
         ].map(([label, value]) => (
-          <div key={label} className="bg-gradient-to-br from-red-900 to-yellow-600 text-white p-6 rounded-xl shadow-lg">
-            <h4 className="text-sm opacity-90 mb-2">{label}</h4>
-            <div className="text-5xl font-bold">{value}</div>
+          <div key={label} className="bg-gradient-to-br from-red-900 to-yellow-600 text-white p-4 sm:p-6 rounded-xl shadow-lg">
+            <h4 className="text-xs sm:text-sm opacity-90 mb-2">{label}</h4>
+            <div className="text-3xl sm:text-5xl font-bold">{value}</div>
           </div>
         ))}
       </div>
 
-      <div className="bg-gray-50 p-6 rounded-xl">
+      <div className="bg-gray-50 p-4 sm:p-6 rounded-xl">
         <h3 className="text-xl font-bold text-red-900 mb-4">🔍 Student Violation History</h3>
         <div className="mb-4">
           <input type="text" placeholder="Enter Student ID to view history..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-full max-w-md p-3 border-2 border-gray-300 rounded-lg focus:border-red-900 focus:outline-none" />
@@ -219,7 +219,7 @@ function Dashboard({ violations, students }) {
           <div className="bg-yellow-100 p-4 rounded-lg text-yellow-800">No student found with ID {q}.</div>
         ) : (
           <div className="mt-4">
-            <div className="bg-blue-100 p-4 rounded-lg mb-4">
+            <div className="bg-blue-100 p-4 rounded-lg mb-4 break-words">
               <h4 className="font-bold text-blue-900 mb-2">Student Information</h4>
               <p><strong>ID:</strong> {q}</p>
               {student && <p><strong>Name:</strong> {student.lastName}, {student.firstName} ({student.educationLevel}{student.yearLevel ? ', ' + student.yearLevel : ''})</p>}
@@ -229,7 +229,7 @@ function Dashboard({ violations, students }) {
               <div className="bg-green-100 p-4 rounded-lg text-green-800">Student ID {q} has no violation records.</div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full border-collapse">
+                <table className="rtable w-full border-collapse">
                   <thead>
                     <tr className="bg-gray-200">
                       <th className="p-2 text-left">Date</th>
@@ -241,10 +241,10 @@ function Dashboard({ violations, students }) {
                   <tbody>
                     {history.map((v) => (
                       <tr key={v.id} className="border-b">
-                        <td className="p-2">{toLocalDate(v.occurredAt)}</td>
-                        <td className="p-2">{v.violationType}</td>
-                        <td className="p-2"><span className={`px-2 py-1 rounded text-xs font-bold ${sevCls(v.severity)}`}>{v.severity}</span></td>
-                        <td className="p-2"><span className={`px-2 py-1 rounded text-xs font-bold ${statCls(v.status)}`}>{v.status}</span></td>
+                        <td data-label="Date" className="p-2">{toLocalDate(v.occurredAt)}</td>
+                        <td data-label="Violation" className="p-2">{v.violationType}</td>
+                        <td data-label="Severity" className="p-2"><span className={`px-2 py-1 rounded text-xs font-bold ${sevCls(v.severity)}`}>{v.severity}</span></td>
+                        <td data-label="Status" className="p-2"><span className={`px-2 py-1 rounded text-xs font-bold ${statCls(v.status)}`}>{v.status}</span></td>
                       </tr>
                     ))}
                   </tbody>
@@ -293,9 +293,9 @@ function RecordForm({ students, onSaved, notify, onError }) {
   };
 
   return (
-    <form onSubmit={submit} className="bg-gray-50 p-6 rounded-xl">
+    <form onSubmit={submit} className="bg-gray-50 p-4 sm:p-6 rounded-xl">
       <h3 className="text-xl font-bold text-red-900 mb-6">Record New Violation</h3>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
         <div>
           <label className={labelCls}>Date *</label>
           <input type="date" required value={f.date} onChange={set('date')} className={inputCls} />
@@ -374,19 +374,19 @@ function ViolationsLog({ violations, canWrite, canDelete, reload, notify, onErro
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-gray-800">Violations Log</h2>
-        <div className="flex gap-2">
-          <button onClick={() => window.print()} className="bg-green-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-green-700 transition">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-6">
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-800">Violations Log</h2>
+        <div className="flex flex-wrap gap-2">
+          <button onClick={() => window.print()} className="bg-green-600 text-white px-4 py-2 rounded-lg flex flex-1 sm:flex-none items-center justify-center gap-2 hover:bg-green-700 transition">
             <Printer size={18} /> Print
           </button>
-          <button onClick={() => exportCsv(violations)} className="bg-green-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-green-700 transition">
+          <button onClick={() => exportCsv(violations)} className="bg-green-600 text-white px-4 py-2 rounded-lg flex flex-1 sm:flex-none items-center justify-center gap-2 hover:bg-green-700 transition">
             <Download size={18} /> Export
           </button>
         </div>
       </div>
-      <div className="overflow-x-auto rounded-lg shadow">
-        <table className="w-full border-collapse">
+      <div className="overflow-x-auto rounded-lg md:shadow">
+        <table className="rtable w-full border-collapse">
           <thead>
             <tr className={theadCls}>
               {['Record ID', 'Date', 'Student ID', 'Student Name', 'Violation', 'Severity', 'Status', 'Actions'].map((h) => (
@@ -400,24 +400,24 @@ function ViolationsLog({ violations, canWrite, canDelete, reload, notify, onErro
             )}
             {violations.map((v) => (
               <tr key={v.id} className="border-b hover:bg-gray-50 transition">
-                <td className="p-3 font-mono text-sm">{v.recordNo}</td>
-                <td className="p-3">{toLocalDate(v.occurredAt)}</td>
-                <td className="p-3 font-semibold">{v.studentNo}</td>
-                <td className="p-3">{v.studentName}</td>
-                <td className="p-3" title={v.details}>{v.violationType}</td>
-                <td className="p-3"><span className={`px-3 py-1 rounded-full text-xs font-bold ${sevCls(v.severity)}`}>{v.severity}</span></td>
-                <td className="p-3">
+                <td data-label="Record ID" className="p-3 font-mono text-sm">{v.recordNo}</td>
+                <td data-label="Date" className="p-3">{toLocalDate(v.occurredAt)}</td>
+                <td data-label="Student ID" className="p-3 font-semibold">{v.studentNo}</td>
+                <td data-label="Student Name" className="p-3">{v.studentName}</td>
+                <td data-label="Violation" className="p-3" title={v.details}>{v.violationType}</td>
+                <td data-label="Severity" className="p-3"><span className={`px-3 py-1 rounded-full text-xs font-bold ${sevCls(v.severity)}`}>{v.severity}</span></td>
+                <td data-label="Status" className="p-3">
                   {canWrite ? (
-                    <select value={v.status} onChange={(e) => changeStatus(v, e.target.value)} className="p-1 border-2 border-gray-300 rounded-lg text-sm">
+                    <select value={v.status} onChange={(e) => changeStatus(v, e.target.value)} className="p-2 sm:p-1 border-2 border-gray-300 rounded-lg text-sm">
                       {STATUSES.map((s) => <option key={s}>{s}</option>)}
                     </select>
                   ) : (
                     <span className={`px-3 py-1 rounded-full text-xs font-bold ${statCls(v.status)}`}>{v.status}</span>
                   )}
                 </td>
-                <td className="p-3">
+                <td data-label="Actions" className="p-3">
                   {canDelete && (
-                    <button onClick={() => remove(v)} title="Delete record" className="text-red-600 hover:text-red-800 transition">
+                    <button onClick={() => remove(v)} title="Delete record" aria-label="Delete record" className="p-2 text-red-600 hover:text-red-800 transition">
                       <Trash2 size={18} />
                     </button>
                   )}
@@ -510,13 +510,13 @@ function ImportPanel({ reload, notify, onError, onClose }) {
   const importable = preview ? preview.create + preview.update : 0;
 
   return (
-    <div className="bg-gray-50 p-6 rounded-xl mb-6">
+    <div className="bg-gray-50 p-4 sm:p-6 rounded-xl mb-6">
       <h3 className="text-lg font-bold text-gray-800 mb-1">📥 Import Student Master List from a file</h3>
       <p className="text-sm text-gray-600 mb-4">
         In Excel, use File &gt; Save As &gt; <b>CSV UTF-8 (Comma delimited)</b>, then choose that file here. Required columns:
         Student ID, Last Name, First Name, Level (or pick a level below if the whole file is one level). Up to 5,000 students per file.
       </p>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
         <div>
           <label className={labelCls}>CSV file</label>
           <input type="file" accept=".csv,text/csv,.txt,.xlsx,.xls" onChange={onFile} disabled={busy} className={inputCls} />
@@ -616,13 +616,13 @@ function DeleteAllStudents({ students, reload, notify, onError }) {
   };
 
   return (
-    <div className="mt-16 pt-6 border-t-2 border-dashed border-red-300">
+    <div className="mt-10 sm:mt-16 pt-6 border-t-2 border-dashed border-red-300">
       {!open ? (
         <button onClick={() => setOpen(true)} className="text-red-700 border-2 border-red-300 px-4 py-2 rounded-lg hover:bg-red-50 transition text-sm">
           🗑️ Delete All Students...
         </button>
       ) : (
-        <div className="max-w-2xl bg-red-50 border-2 border-red-400 rounded-xl p-6">
+        <div className="max-w-2xl bg-red-50 border-2 border-red-400 rounded-xl p-4 sm:p-6">
           <h3 className="text-lg font-bold text-red-800 mb-3">⚠️ Delete the entire Student Master List?</h3>
           {deletable === 0 ? (
             <p className="mb-4 text-gray-800">Nothing can be deleted: every student here has violation records. Delete those records in the Violations Log first.</p>
@@ -648,7 +648,7 @@ function DeleteAllStudents({ students, reload, notify, onError }) {
               />
             </>
           )}
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-3">
             {deletable > 0 && (
               <button
                 onClick={run}
@@ -721,14 +721,14 @@ function StudentsTab({ students, canWrite, reload, notify, onError }) {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-gray-800">Student Master List</h2>
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-6">
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-800">Student Master List</h2>
         {canWrite && (
-          <div className="flex gap-2">
-            <button onClick={() => setImportOpen(!importOpen)} className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => setImportOpen(!importOpen)} className="flex-1 sm:flex-none bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">
               {importOpen ? 'Close Import' : '📥 Import from File'}
             </button>
-            <button onClick={() => setOpen(!open)} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition">
+            <button onClick={() => setOpen(!open)} className="flex-1 sm:flex-none bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition">
               {open ? 'Cancel' : '➕ Add Student'}
             </button>
           </div>
@@ -740,8 +740,8 @@ function StudentsTab({ students, canWrite, reload, notify, onError }) {
       )}
 
       {open && (
-        <form onSubmit={submit} className="bg-gray-50 p-6 rounded-xl mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+        <form onSubmit={submit} className="bg-gray-50 p-4 sm:p-6 rounded-xl mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
             {field('studentNo', 'Student ID', true)}
             {field('lastName', 'Last Name', true)}
             {field('firstName', 'First Name', true)}
@@ -770,13 +770,13 @@ function StudentsTab({ students, canWrite, reload, notify, onError }) {
           onChange={(e) => setFilter(e.target.value)}
           className="w-full max-w-md p-3 border-2 border-gray-300 rounded-lg focus:border-red-900 focus:outline-none"
         />
-        <span className="ml-3 text-sm text-gray-600">
+        <span className="block sm:inline mt-2 sm:mt-0 sm:ml-3 text-sm text-gray-600">
           {shown.length > visible.length ? `Showing first ${visible.length} of ${shown.length}. Type to narrow the list.` : `${shown.length} student(s)`}
         </span>
       </div>
 
-      <div className="overflow-x-auto rounded-lg shadow">
-        <table className="w-full border-collapse">
+      <div className="overflow-x-auto rounded-lg md:shadow">
+        <table className="rtable w-full border-collapse">
           <thead>
             <tr className={theadCls}>
               {['Student ID', 'Last Name', 'First Name', 'Middle Name', 'Level', 'Year Level', 'Course', 'Section', 'Guardian Contact', 'Violations', ...(canWrite ? ['Actions'] : [])].map((h) => (
@@ -790,20 +790,20 @@ function StudentsTab({ students, canWrite, reload, notify, onError }) {
             )}
             {visible.map((s) => (
               <tr key={s.id} className="border-b hover:bg-gray-50 transition">
-                <td className="p-3 font-bold text-red-900">{s.studentNo}</td>
-                <td className="p-3">{s.lastName}</td>
-                <td className="p-3">{s.firstName}</td>
-                <td className="p-3">{s.middleName}</td>
-                <td className="p-3">{s.educationLevel}</td>
-                <td className="p-3">{s.yearLevel}</td>
-                <td className="p-3">{s.course}</td>
-                <td className="p-3">{s.section}</td>
-                <td className="p-3">{s.guardianContact}</td>
-                <td className="p-3">
+                <td data-label="Student ID" className="p-3 font-bold text-red-900">{s.studentNo}</td>
+                <td data-label="Last Name" className="p-3">{s.lastName}</td>
+                <td data-label="First Name" className="p-3">{s.firstName}</td>
+                <td data-label="Middle Name" className="p-3">{s.middleName}</td>
+                <td data-label="Level" className="p-3">{s.educationLevel}</td>
+                <td data-label="Year Level" className="p-3">{s.yearLevel}</td>
+                <td data-label="Course" className="p-3">{s.course}</td>
+                <td data-label="Section" className="p-3">{s.section}</td>
+                <td data-label="Guardian Contact" className="p-3">{s.guardianContact}</td>
+                <td data-label="Violations" className="p-3">
                   <span className="inline-flex items-center justify-center w-8 h-8 bg-red-100 text-red-900 font-bold rounded-full">{s.violationCount}</span>
                 </td>
                 {canWrite && (
-                  <td className="p-3">
+                  <td data-label="Actions" className="p-3">
                     <button
                       onClick={() => remove(s)}
                       title={s.violationCount > 0 ? 'Has violation records' : 'Delete student'}
@@ -874,10 +874,10 @@ function UsersTab({ currentUser, notify, onError, usernameOnly }) {
 
   return (
     <div>
-      <h2 className="text-2xl font-bold mb-6 text-gray-800">User Accounts</h2>
-      <form onSubmit={create} className="bg-gray-50 p-6 rounded-xl mb-6">
+      <h2 className="text-xl sm:text-2xl font-bold mb-6 text-gray-800">User Accounts</h2>
+      <form onSubmit={create} className="bg-gray-50 p-4 sm:p-6 rounded-xl mb-6">
         <h3 className="text-lg font-bold text-red-900 mb-4">Add a user</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
           <div>
             <label className={labelCls}>Username *</label>
             <input type="text" required autoComplete="off" value={f.username} onChange={set('username')} className={inputCls} />
@@ -897,8 +897,8 @@ function UsersTab({ currentUser, notify, onError, usernameOnly }) {
         <p className="text-sm text-gray-600 mt-3">Every account has full access, so only create accounts for OSAS personnel.</p>
       </form>
 
-      <div className="overflow-x-auto rounded-lg shadow">
-        <table className="w-full border-collapse">
+      <div className="overflow-x-auto rounded-lg md:shadow">
+        <table className="rtable w-full border-collapse">
           <thead>
             <tr className={theadCls}>
               {['Username', 'Full Name', 'Status', 'Actions'].map((h) => <th key={h} className="p-3 text-left">{h}</th>)}
@@ -909,14 +909,16 @@ function UsersTab({ currentUser, notify, onError, usernameOnly }) {
               const self = u.id === currentUser.id;
               return (
                 <tr key={u.id} className="border-b hover:bg-gray-50 transition">
-                  <td className="p-3 font-semibold">{u.username}{self ? ' (you)' : ''}</td>
-                  <td className="p-3">{u.fullName}</td>
-                  <td className="p-3">
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${u.active ? 'bg-green-500 text-white' : 'bg-gray-400 text-white'}`}>{u.active ? 'Active' : 'Disabled'}</span>
-                    {u.role === 'viewer' && <span className="ml-2 text-xs text-red-700">old read-only account (cannot sign in)</span>}
-                    {u.mustChangePassword && <span className="ml-2 text-xs text-gray-600">must change password</span>}
+                  <td data-label="Username" className="p-3 font-semibold">{u.username}{self ? ' (you)' : ''}</td>
+                  <td data-label="Full Name" className="p-3">{u.fullName}</td>
+                  <td data-label="Status" className="p-3">
+                    <div>
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${u.active ? 'bg-green-500 text-white' : 'bg-gray-400 text-white'}`}>{u.active ? 'Active' : 'Disabled'}</span>
+                      {u.role === 'viewer' && <span className="ml-2 text-xs text-red-700">old read-only account (cannot sign in)</span>}
+                      {u.mustChangePassword && <span className="ml-2 text-xs text-gray-600">must change password</span>}
+                    </div>
                   </td>
-                  <td className="p-3 space-x-3 whitespace-nowrap">
+                  <td data-label="Actions" className="p-3 space-x-3 whitespace-nowrap">
                     {!self && (
                       <button onClick={() => patch(u, { active: !u.active }, u.active ? 'User disabled' : 'User enabled')} className="text-blue-700 underline text-sm">
                         {u.active ? 'Disable' : 'Enable'}
@@ -942,9 +944,9 @@ function AuditTab({ onError }) {
 
   return (
     <div>
-      <h2 className="text-2xl font-bold mb-6 text-gray-800">Audit Log (latest 200)</h2>
-      <div className="overflow-x-auto rounded-lg shadow">
-        <table className="w-full border-collapse text-sm">
+      <h2 className="text-xl sm:text-2xl font-bold mb-6 text-gray-800">Audit Log (latest 200)</h2>
+      <div className="overflow-x-auto rounded-lg md:shadow">
+        <table className="rtable w-full border-collapse text-sm">
           <thead>
             <tr className={theadCls}>
               {['When', 'User', 'Action', 'Entity', 'ID', 'Details', 'IP'].map((h) => <th key={h} className="p-3 text-left">{h}</th>)}
@@ -953,13 +955,13 @@ function AuditTab({ onError }) {
           <tbody className="bg-white">
             {entries.map((a) => (
               <tr key={a.id} className="border-b hover:bg-gray-50">
-                <td className="p-3 whitespace-nowrap">{new Date(a.createdAt).toLocaleString()}</td>
-                <td className="p-3">{a.username}</td>
-                <td className="p-3 font-mono">{a.action}</td>
-                <td className="p-3">{a.entity}</td>
-                <td className="p-3">{a.entityId}</td>
-                <td className="p-3">{a.details}</td>
-                <td className="p-3">{a.ip}</td>
+                <td data-label="When" className="p-3 whitespace-nowrap">{new Date(a.createdAt).toLocaleString()}</td>
+                <td data-label="User" className="p-3">{a.username}</td>
+                <td data-label="Action" className="p-3 font-mono">{a.action}</td>
+                <td data-label="Entity" className="p-3">{a.entity}</td>
+                <td data-label="ID" className="p-3">{a.entityId}</td>
+                <td data-label="Details" className="p-3">{a.details}</td>
+                <td data-label="IP" className="p-3">{a.ip}</td>
               </tr>
             ))}
           </tbody>
@@ -1059,7 +1061,7 @@ const SSCInfractionsSystem = () => {
 
   let screen;
   if (auth.status === 'loading') {
-    screen = <div className="min-h-screen bg-gradient-to-br from-red-900 to-yellow-600 flex items-center justify-center text-white text-lg">Loading...</div>;
+    screen = <div className="min-h-dvh bg-gradient-to-br from-red-900 to-yellow-600 flex items-center justify-center text-white text-lg">Loading...</div>;
   } else if (auth.status === 'out') {
     screen = <LoginScreen onLogin={handleLogin} error={loginError} busy={busy} usernameOnly={usernameOnly} />;
   } else if (auth.mustChange) {
@@ -1073,25 +1075,25 @@ const SSCInfractionsSystem = () => {
       ...(isAdmin ? [{ id: 'users', label: '👤 Users' }, { id: 'audit', label: '🧾 Audit Log' }] : []),
     ];
     screen = (
-      <div className="min-h-screen bg-gradient-to-br from-red-900 to-yellow-600 p-4">
+      <div className="min-h-dvh bg-gradient-to-br from-red-900 to-yellow-600 p-2 sm:p-4">
         <div className="max-w-7xl mx-auto bg-white rounded-2xl shadow-2xl overflow-hidden">
-          <div className="bg-gradient-to-r from-red-900 to-yellow-600 text-white p-6">
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-4">
+          <div className="bg-gradient-to-r from-red-900 to-yellow-600 text-white p-4 sm:p-6">
+            <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+              <div className="flex items-center gap-3 sm:gap-4 min-w-0">
                 <SchoolLogo />
                 <div>
-                  <h1 className="text-3xl font-bold mb-1">📋 Student Infractions Tracking System</h1>
+                  <h1 className="text-lg sm:text-2xl lg:text-3xl font-bold mb-1 leading-tight">📋 Student Infractions Tracking System</h1>
                   <p className="text-sm font-medium opacity-95">San Sebastian College-Recoletos, Manila</p>
                   <p className="text-sm opacity-90">Office of Student Affairs and Services</p>
                   <p className="text-xs mt-2 flex items-center gap-2">
-                    <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+                    <span className="shrink-0 w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
                     Connected to server • Changes are saved to the database
                   </p>
                 </div>
               </div>
-              <div className="text-right">
-                <div className="text-lg font-semibold">{user.fullName}</div>
-                <div className="mb-2"></div>
+              <div className="flex items-center justify-between gap-3 md:block md:text-right">
+                <div className="text-base sm:text-lg font-semibold break-words min-w-0">{user.fullName}</div>
+                <div className="hidden md:block mb-2"></div>
                 <button onClick={handleLogout} className="bg-white/20 border-2 border-white text-white px-4 py-2 rounded-lg font-semibold hover:bg-white hover:text-red-900 transition">
                   Logout
                 </button>
@@ -1104,7 +1106,7 @@ const SSCInfractionsSystem = () => {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`px-6 py-4 font-semibold transition whitespace-nowrap ${
+                className={`px-4 sm:px-6 py-3 sm:py-4 font-semibold transition whitespace-nowrap shrink-0 ${
                   activeTab === tab.id ? 'bg-white text-red-900 border-b-4 border-red-900' : 'text-gray-600 hover:bg-gray-200'
                 }`}
               >
@@ -1113,7 +1115,7 @@ const SSCInfractionsSystem = () => {
             ))}
           </div>
 
-          <div className="p-6">
+          <div className="p-3 sm:p-6">
             {activeTab === 'dashboard' && <Dashboard violations={violations} students={students} />}
             {activeTab === 'violations' && canWrite && (
               <RecordForm students={students} onSaved={loadData} notify={displayAlert} onError={handleError} />
@@ -1136,8 +1138,8 @@ const SSCInfractionsSystem = () => {
     <>
       {screen}
       {showAlert.show && (
-        <div className="fixed bottom-4 right-4 z-50">
-          <div className={`p-4 rounded-lg shadow-lg ${showAlert.type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}>
+        <div className="fixed bottom-4 left-4 right-4 sm:left-auto z-50">
+          <div className={`p-4 rounded-lg shadow-lg sm:max-w-sm ml-auto break-words ${showAlert.type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}>
             {showAlert.message}
           </div>
         </div>

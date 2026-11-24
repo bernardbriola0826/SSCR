@@ -1,1 +1,93 @@
 @import "tailwindcss";
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+}
+
+/* ---------- Phones: tables become stacked cards (screen only, never when printing) ---------- */
+@media screen and (max-width: 767px) {
+  /* 16px inputs stop iOS Safari from zooming in when a field is focused */
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
+  .rtable,
+  .rtable tbody,
+  .rtable tr,
+  .rtable td {
+    display: block;
+    width: 100%;
+  }
+
+  /* visually hidden but still available to screen readers */
+  .rtable thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .rtable tbody {
+    background: transparent;
+  }
+
+  .rtable tr {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.75rem;
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.08);
+    margin-bottom: 0.75rem;
+    padding: 0.25rem 0.875rem;
+  }
+
+  .rtable td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px dashed #e5e7eb;
+    text-align: right;
+    overflow-wrap: anywhere;
+  }
+
+  .rtable td:last-child {
+    border-bottom: 0;
+  }
+
+  .rtable td::before {
+    content: attr(data-label);
+    flex-shrink: 0;
+    max-width: 45%;
+    text-align: left;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: #7f1d1d;
+  }
+
+  /* blank cells (e.g. no middle name, no delete permission) are dropped from the card */
+  .rtable td:empty {
+    display: none;
+  }
+
+  /* "No records" message rows */
+  .rtable td[colspan] {
+    display: block;
+    text-align: center;
+  }
+  .rtable td[colspan]::before {
+    content: none;
+  }
+}
