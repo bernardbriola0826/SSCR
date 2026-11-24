@@ -75,9 +75,7 @@ function exportCsv(rows) {
 }
 
 const SchoolLogo = () => (
-  <div className="bg-white rounded-2xl p-2 shadow-lg">
-    <img src="/ssc-logo.png" alt="San Sebastian College-Recoletos seal" className="w-24 h-auto block" />
-  </div>
+  <img src="/ssc-logo.png" alt="San Sebastian College-Recoletos seal" className="w-28 h-auto block drop-shadow-xl" />
 );
 
 const Header = ({ title, children }) => (
