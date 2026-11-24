@@ -13,6 +13,9 @@ const app = express();
 
 app.set('trust proxy', 1);
 app.use(helmet());
+// The student import sends a whole spreadsheet at once, so it gets a bigger limit.
+// This must come before the general parser below.
+app.use('/api/students/import', express.json({ limit: '5mb' }));
 app.use(express.json({ limit: '100kb' }));
 app.use(cookieParser());
 

@@ -38,4 +38,11 @@ function parseId(value) {
   return Number.isInteger(n) && n > 0 ? n : null;
 }
 
-module.exports = { asyncHandler, audit, validatePassword, cleanText, parseId };
+// Only OSAS staff accounts exist: admin and staff. (The old read-only 'viewer' role is retired.)
+const ROLES = ['admin', 'staff'];
+
+// LOGIN_MODE=username-only in .env lets people sign in with a username and no password.
+// Only use it where nobody outside OSAS can reach the system. Remove the line to turn passwords back on.
+const isUsernameOnly = () => process.env.LOGIN_MODE === 'username-only';
+
+module.exports = { asyncHandler, audit, validatePassword, cleanText, parseId, ROLES, isUsernameOnly };

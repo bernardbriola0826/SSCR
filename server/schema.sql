@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS users (
   username VARCHAR(50) UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
   full_name VARCHAR(100) NOT NULL,
-  role VARCHAR(20) NOT NULL CHECK (role IN ('admin', 'staff', 'viewer')),
+  role VARCHAR(20) NOT NULL CHECK (role IN ('admin', 'staff')),
   must_change_password BOOLEAN NOT NULL DEFAULT TRUE,
   active BOOLEAN NOT NULL DEFAULT TRUE,
   failed_attempts INT NOT NULL DEFAULT 0,

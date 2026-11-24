@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
 const pool = require('../db');
-const { asyncHandler } = require('../lib/helpers');
+const { asyncHandler, ROLES, isUsernameOnly } = require('../lib/helpers');
 
 // Checks the login cookie and loads the user fresh from the database,
 // so a deactivated account or a changed role takes effect immediately.
@@ -20,14 +20,15 @@ const requireAuth = asyncHandler(async (req, res, next) => {
     [payload.id]
   );
   const user = rows[0];
-  if (!user || !user.active) return res.status(401).json({ error: 'Account not available' });
+  if (!user || !user.active || !ROLES.includes(user.role)) return res.status(401).json({ error: 'Account not available' });
 
   req.user = {
     id: user.id,
     username: user.username,
     fullName: user.full_name,
-    role: user.role,
-    mustChangePassword: user.must_change_password,
+    // OSAS has a single level of access: every active account can do everything.
+    role: 'admin',
+    mustChangePassword: isUsernameOnly() ? false : user.must_change_password,
   };
   next();
 });

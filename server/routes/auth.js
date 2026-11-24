@@ -4,7 +4,7 @@ const jwt = require('jsonwebtoken');
 const rateLimit = require('express-rate-limit');
 const pool = require('../db');
 const { requireAuth } = require('../middleware/auth');
-const { asyncHandler, audit, validatePassword } = require('../lib/helpers');
+const { asyncHandler, audit, validatePassword, ROLES, isUsernameOnly } = require('../lib/helpers');
 
 const router = express.Router();
 
@@ -20,9 +20,18 @@ const loginLimiter = rateLimit({
   message: { error: 'Too many attempts. Please try again later.' },
 });
 
+// Lets the login screen know whether to ask for a password.
+router.get('/config', (req, res) => {
+  res.json({ usernameOnly: isUsernameOnly() });
+});
+
 router.post('/login', loginLimiter, asyncHandler(async (req, res) => {
+  const usernameOnly = isUsernameOnly();
   const { username, password } = req.body || {};
-  if (typeof username !== 'string' || typeof password !== 'string' || !username || !password) {
+  if (typeof username !== 'string' || !username.trim()) {
+    return res.status(400).json({ error: usernameOnly ? 'Username is required' : 'Username and password are required' });
+  }
+  if (!usernameOnly && (typeof password !== 'string' || !password)) {
     return res.status(400).json({ error: 'Username and password are required' });
   }
 
@@ -30,16 +39,16 @@ router.post('/login', loginLimiter, asyncHandler(async (req, res) => {
   const user = rows[0];
   const invalid = { error: 'Invalid username or password' };
 
-  if (!user || !user.active) {
-    await bcrypt.compare(password, DUMMY_HASH); // keeps timing similar for unknown users
+  if (!user || !user.active || !ROLES.includes(user.role)) {
+    if (!usernameOnly) await bcrypt.compare(password, DUMMY_HASH); // keeps timing similar for unknown users
     return res.status(401).json(invalid);
   }
 
-  if (user.locked_until && new Date(user.locked_until) > new Date()) {
+  if (!usernameOnly && user.locked_until && new Date(user.locked_until) > new Date()) {
     return res.status(423).json({ error: 'Account temporarily locked. Please try again later.' });
   }
 
-  const ok = await bcrypt.compare(password, user.password_hash);
+  const ok = usernameOnly ? true : await bcrypt.compare(password, user.password_hash);
   if (!ok) {
     const attempts = user.failed_attempts + 1;
     if (attempts >= MAX_ATTEMPTS) {
@@ -68,7 +77,7 @@ router.post('/login', loginLimiter, asyncHandler(async (req, res) => {
   await audit(req, 'LOGIN_OK', 'auth', user.id, null, user.id);
   res.json({
     user: { id: user.id, username: user.username, fullName: user.full_name, role: user.role },
-    mustChangePassword: user.must_change_password,
+    mustChangePassword: usernameOnly ? false : user.must_change_password,
   });
 }));
 

@@ -1,12 +1,12 @@
 // @ts-nocheck
 import React, { useState, useEffect, useCallback } from 'react';
 import { Printer, Download, Trash2 } from 'lucide-react';
+import { decodeCsvBytes, csvToItems, TEMPLATE_CSV } from './csvImport';
 
 const SEVERITIES = ['Minor', 'Major', 'Critical'];
 const STATUSES = ['Pending', 'Ongoing', 'Resolved', 'Dismissed'];
 const VIOLATION_TYPES = ['Tardiness', 'Uniform Violation', 'Behavioral Misconduct', 'Academic Dishonesty', 'Bullying/Harassment'];
 const LEVELS = ['Grade School', 'Junior High', 'Senior High', 'College'];
-const ROLES = ['admin', 'staff', 'viewer'];
 
 const inputCls = 'w-full p-2 border-2 border-gray-300 rounded-lg focus:border-red-900 focus:outline-none';
 const bigInputCls = 'w-full p-3 border-2 border-gray-300 rounded-lg focus:border-red-900 focus:outline-none';
@@ -100,7 +100,7 @@ const Header = ({ title, children }) => (
 
 // ---------- sign in / password change ----------
 
-function LoginScreen({ onLogin, error, busy }) {
+function LoginScreen({ onLogin, error, busy, usernameOnly }) {
   const [form, setForm] = useState({ username: '', password: '' });
   return (
     <div className="min-h-screen bg-gradient-to-br from-red-900 to-yellow-600 flex items-center justify-center p-4">
@@ -120,10 +120,12 @@ function LoginScreen({ onLogin, error, busy }) {
             <label className={labelCls}>Username</label>
             <input type="text" autoComplete="username" autoFocus required value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} className={bigInputCls} />
           </div>
-          <div>
-            <label className={labelCls}>Password</label>
-            <input type="password" autoComplete="current-password" required value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className={bigInputCls} />
-          </div>
+          {!usernameOnly && (
+            <div>
+              <label className={labelCls}>Password</label>
+              <input type="password" autoComplete="current-password" required value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className={bigInputCls} />
+            </div>
+          )}
           <button type="submit" disabled={busy} className="w-full bg-gradient-to-r from-red-900 to-yellow-600 text-white font-bold py-3 rounded-lg hover:shadow-lg transition disabled:opacity-60">
             {busy ? 'Signing in...' : 'Sign In'}
           </button>
@@ -439,9 +441,172 @@ function ViolationsLog({ violations, canWrite, canDelete, reload, notify, onErro
   );
 }
 
+function ImportPanel({ reload, notify, onError, onClose }) {
+  const [fileName, setFileName] = useState('');
+  const [items, setItems] = useState([]);
+  const [defaultLevel, setDefaultLevel] = useState('');
+  const [mode, setMode] = useState('skip');
+  const [preview, setPreview] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const run = async (dryRun, rows = items, lvl = defaultLevel, m = mode) => {
+    setBusy(true);
+    try {
+      const body = { rows, mode: m, dryRun };
+      if (lvl) body.defaultLevel = lvl;
+      return await api('/students/import', { method: 'POST', body });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const check = async (rows, lvl, m) => {
+    if (!rows.length) return;
+    try {
+      setPreview(await run(true, rows, lvl, m));
+    } catch (err) {
+      setPreview(null);
+      onError(err);
+    }
+  };
+
+  const onFile = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    setPreview(null);
+    setFileName(file.name);
+    if (/\.xlsx?$/i.test(file.name)) {
+      setItems([]);
+      onError(new Error('Please save the Excel file as CSV first: File > Save As > "CSV UTF-8 (Comma delimited)".'));
+      return;
+    }
+    const { items: parsed } = csvToItems(decodeCsvBytes(await file.arrayBuffer()));
+    setItems(parsed);
+    if (!parsed.length) {
+      onError(new Error('That file has no student rows.'));
+      return;
+    }
+    check(parsed, defaultLevel, mode);
+  };
+
+  const changeLevel = (v) => { setDefaultLevel(v); check(items, v, mode); };
+  const changeMode = (v) => { setMode(v); check(items, defaultLevel, v); };
+
+  const doImport = async () => {
+    try {
+      const r = await run(false);
+      notify(`Import done: ${r.created} added, ${r.updated} updated, ${r.skipped} skipped, ${r.invalidCount} with problems`, 'success');
+      setPreview(null);
+      setItems([]);
+      setFileName('');
+      reload();
+      if (!r.invalidCount) onClose();
+    } catch (err) {
+      onError(err);
+    }
+  };
+
+  const downloadTemplate = () => {
+    const blob = new Blob(['\uFEFF' + TEMPLATE_CSV], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'student-master-list-template.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const importable = preview ? preview.create + preview.update : 0;
+
+  return (
+    <div className="bg-gray-50 p-6 rounded-xl mb-6">
+      <h3 className="text-lg font-bold text-gray-800 mb-1">📥 Import Student Master List from a file</h3>
+      <p className="text-sm text-gray-600 mb-4">
+        In Excel, use File &gt; Save As &gt; <b>CSV UTF-8 (Comma delimited)</b>, then choose that file here. Required columns:
+        Student ID, Last Name, First Name, Level (or pick a level below if the whole file is one level). Up to 5,000 students per file.
+      </p>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+        <div>
+          <label className={labelCls}>CSV file</label>
+          <input type="file" accept=".csv,text/csv,.txt,.xlsx,.xls" onChange={onFile} disabled={busy} className={inputCls} />
+        </div>
+        <div>
+          <label className={labelCls}>If a row has no Level, use</label>
+          <select value={defaultLevel} onChange={(e) => changeLevel(e.target.value)} className={inputCls}>
+            <option value="">(none, the file has a Level column)</option>
+            {LEVELS.map((l) => <option key={l}>{l}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className={labelCls}>Students already in the list</label>
+          <select value={mode} onChange={(e) => changeMode(e.target.value)} className={inputCls}>
+            <option value="skip">Skip them (keep current details)</option>
+            <option value="update">Update them (blank cells never erase data)</option>
+          </select>
+        </div>
+      </div>
+
+      {fileName && <p className="text-sm text-gray-700 mb-2">File: <b>{fileName}</b> · {items.length} rows read</p>}
+
+      {preview && (
+        <div className="mb-4">
+          <div className="flex flex-wrap gap-3 mb-3">
+            <span className="px-3 py-1 rounded-full bg-green-100 text-green-800 font-semibold">{preview.create} new</span>
+            {mode === 'update'
+              ? <span className="px-3 py-1 rounded-full bg-blue-100 text-blue-800 font-semibold">{preview.update} will be updated</span>
+              : <span className="px-3 py-1 rounded-full bg-gray-200 text-gray-800 font-semibold">{preview.skip} already exist (skipped)</span>}
+            <span className={`px-3 py-1 rounded-full font-semibold ${preview.invalidCount ? 'bg-red-100 text-red-800' : 'bg-gray-200 text-gray-700'}`}>
+              {preview.invalidCount} with problems (not imported)
+            </span>
+          </div>
+          {preview.unmappedColumns && preview.unmappedColumns.length > 0 && (
+            <p className="text-sm text-gray-600 mb-2">Ignored columns: {preview.unmappedColumns.join(', ')}</p>
+          )}
+          {preview.invalidCount > 0 && (
+            <div className="overflow-x-auto rounded-lg shadow max-h-64 overflow-y-auto">
+              <table className="w-full border-collapse text-sm">
+                <thead>
+                  <tr className={theadCls}>
+                    <th className="p-2 text-left">Row</th>
+                    <th className="p-2 text-left">Student ID</th>
+                    <th className="p-2 text-left">Problem</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white">
+                  {preview.invalid.map((p, i) => (
+                    <tr key={i} className="border-b">
+                      <td className="p-2">{p.row}</td>
+                      <td className="p-2">{p.studentNo || ''}</td>
+                      <td className="p-2">{p.error}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {preview.invalidCount > preview.invalid.length && (
+                <p className="p-2 text-sm text-gray-600 bg-white">Showing the first {preview.invalid.length} problems.</p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="flex flex-wrap gap-3">
+        <button onClick={doImport} disabled={busy || !preview || importable === 0} className={btnCls}>
+          {busy ? 'Working...' : `✅ Import ${importable || ''} student${importable === 1 ? '' : 's'}`}
+        </button>
+        <button onClick={downloadTemplate} type="button" className="bg-white border-2 border-gray-300 px-4 py-3 rounded-lg hover:bg-gray-100 transition">
+          ⬇️ Download template
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function StudentsTab({ students, canWrite, reload, notify, onError }) {
   const blank = { studentNo: '', lastName: '', firstName: '', middleName: '', educationLevel: 'College', yearLevel: '', course: '', section: '', guardianName: '', guardianContact: '' };
   const [open, setOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [f, setF] = useState(blank);
   const [saving, setSaving] = useState(false);
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
@@ -462,6 +627,21 @@ function StudentsTab({ students, canWrite, reload, notify, onError }) {
     }
   };
 
+  const remove = async (s) => {
+    if (s.violationCount > 0) {
+      onError(new Error(`${s.lastName}, ${s.firstName} has ${s.violationCount} violation record(s). Delete those records in the Violations Log first.`));
+      return;
+    }
+    if (!window.confirm(`Delete ${s.lastName}, ${s.firstName} (${s.studentNo}) from the Student Master List? This cannot be undone.`)) return;
+    try {
+      await api(`/students/${s.id}`, { method: 'DELETE' });
+      notify('Student deleted', 'success');
+      reload();
+    } catch (err) {
+      onError(err);
+    }
+  };
+
   const field = (key, label, required, props = {}) => (
     <div key={key}>
       <label className={labelCls}>{label}{required ? ' *' : ''}</label>
@@ -474,11 +654,20 @@ function StudentsTab({ students, canWrite, reload, notify, onError }) {
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold text-gray-800">Student Master List</h2>
         {canWrite && (
-          <button onClick={() => setOpen(!open)} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition">
-            {open ? 'Cancel' : '➕ Add Student'}
-          </button>
+          <div className="flex gap-2">
+            <button onClick={() => setImportOpen(!importOpen)} className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">
+              {importOpen ? 'Close Import' : '📥 Import from File'}
+            </button>
+            <button onClick={() => setOpen(!open)} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition">
+              {open ? 'Cancel' : '➕ Add Student'}
+            </button>
+          </div>
         )}
       </div>
+
+      {importOpen && canWrite && (
+        <ImportPanel reload={reload} notify={notify} onError={onError} onClose={() => setImportOpen(false)} />
+      )}
 
       {open && (
         <form onSubmit={submit} className="bg-gray-50 p-6 rounded-xl mb-6">
@@ -507,14 +696,14 @@ function StudentsTab({ students, canWrite, reload, notify, onError }) {
         <table className="w-full border-collapse">
           <thead>
             <tr className={theadCls}>
-              {['Student ID', 'Last Name', 'First Name', 'Level', 'Year Level', 'Course', 'Section', 'Guardian Contact', 'Violations'].map((h) => (
+              {['Student ID', 'Last Name', 'First Name', 'Level', 'Year Level', 'Course', 'Section', 'Guardian Contact', 'Violations', ...(canWrite ? ['Actions'] : [])].map((h) => (
                 <th key={h} className="p-3 text-left">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody className="bg-white">
             {students.length === 0 && (
-              <tr><td colSpan={9} className="p-6 text-center text-gray-500 italic">No students yet.</td></tr>
+              <tr><td colSpan={10} className="p-6 text-center text-gray-500 italic">No students yet.</td></tr>
             )}
             {students.map((s) => (
               <tr key={s.id} className="border-b hover:bg-gray-50 transition">
@@ -529,6 +718,17 @@ function StudentsTab({ students, canWrite, reload, notify, onError }) {
                 <td className="p-3">
                   <span className="inline-flex items-center justify-center w-8 h-8 bg-red-100 text-red-900 font-bold rounded-full">{s.violationCount}</span>
                 </td>
+                {canWrite && (
+                  <td className="p-3">
+                    <button
+                      onClick={() => remove(s)}
+                      title={s.violationCount > 0 ? 'Has violation records' : 'Delete student'}
+                      className={`p-2 rounded-lg transition ${s.violationCount > 0 ? 'text-gray-400 hover:bg-gray-100' : 'text-red-700 hover:bg-red-100'}`}
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
@@ -538,9 +738,9 @@ function StudentsTab({ students, canWrite, reload, notify, onError }) {
   );
 }
 
-function UsersTab({ currentUser, notify, onError }) {
+function UsersTab({ currentUser, notify, onError, usernameOnly }) {
   const [users, setUsers] = useState([]);
-  const [f, setF] = useState({ username: '', fullName: '', role: 'staff', tempPassword: '' });
+  const [f, setF] = useState({ username: '', fullName: '', tempPassword: '' });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
 
   const load = useCallback(async () => {
@@ -556,7 +756,7 @@ function UsersTab({ currentUser, notify, onError }) {
     e.preventDefault();
     try {
       await api('/users', { method: 'POST', body: f });
-      notify('User created. They must change the password at first login.', 'success');
+      notify(usernameOnly ? 'User created' : 'User created. They must change the password at first login.', 'success');
       setF({ ...f, username: '', fullName: '', tempPassword: '' });
       load();
     } catch (err) {
@@ -589,7 +789,7 @@ function UsersTab({ currentUser, notify, onError }) {
       <h2 className="text-2xl font-bold mb-6 text-gray-800">User Accounts</h2>
       <form onSubmit={create} className="bg-gray-50 p-6 rounded-xl mb-6">
         <h3 className="text-lg font-bold text-red-900 mb-4">Add a user</h3>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
           <div>
             <label className={labelCls}>Username *</label>
             <input type="text" required autoComplete="off" value={f.username} onChange={set('username')} className={inputCls} />
@@ -598,26 +798,22 @@ function UsersTab({ currentUser, notify, onError }) {
             <label className={labelCls}>Full name *</label>
             <input type="text" required value={f.fullName} onChange={set('fullName')} className={inputCls} />
           </div>
-          <div>
-            <label className={labelCls}>Role *</label>
-            <select value={f.role} onChange={set('role')} className={inputCls}>
-              {ROLES.map((r) => <option key={r}>{r}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className={labelCls}>Temporary password *</label>
-            <input type="text" required minLength={12} autoComplete="off" value={f.tempPassword} onChange={set('tempPassword')} className={inputCls} />
-          </div>
+          {!usernameOnly && (
+            <div>
+              <label className={labelCls}>Temporary password *</label>
+              <input type="text" required minLength={12} autoComplete="off" value={f.tempPassword} onChange={set('tempPassword')} className={inputCls} />
+            </div>
+          )}
         </div>
         <button type="submit" className={btnCls}>➕ Create User</button>
-        <p className="text-sm text-gray-600 mt-3">admin: everything · staff: record and edit violations and students · viewer: read only</p>
+        <p className="text-sm text-gray-600 mt-3">Every account has full access, so only create accounts for OSAS personnel.</p>
       </form>
 
       <div className="overflow-x-auto rounded-lg shadow">
         <table className="w-full border-collapse">
           <thead>
             <tr className={theadCls}>
-              {['Username', 'Full Name', 'Role', 'Status', 'Actions'].map((h) => <th key={h} className="p-3 text-left">{h}</th>)}
+              {['Username', 'Full Name', 'Status', 'Actions'].map((h) => <th key={h} className="p-3 text-left">{h}</th>)}
             </tr>
           </thead>
           <tbody className="bg-white">
@@ -628,12 +824,8 @@ function UsersTab({ currentUser, notify, onError }) {
                   <td className="p-3 font-semibold">{u.username}{self ? ' (you)' : ''}</td>
                   <td className="p-3">{u.fullName}</td>
                   <td className="p-3">
-                    <select value={u.role} disabled={self} onChange={(e) => patch(u, { role: e.target.value }, 'Role updated')} className="p-1 border-2 border-gray-300 rounded-lg text-sm">
-                      {ROLES.map((r) => <option key={r}>{r}</option>)}
-                    </select>
-                  </td>
-                  <td className="p-3">
                     <span className={`px-3 py-1 rounded-full text-xs font-bold ${u.active ? 'bg-green-500 text-white' : 'bg-gray-400 text-white'}`}>{u.active ? 'Active' : 'Disabled'}</span>
+                    {u.role === 'viewer' && <span className="ml-2 text-xs text-red-700">old read-only account (cannot sign in)</span>}
                     {u.mustChangePassword && <span className="ml-2 text-xs text-gray-600">must change password</span>}
                   </td>
                   <td className="p-3 space-x-3 whitespace-nowrap">
@@ -642,7 +834,7 @@ function UsersTab({ currentUser, notify, onError }) {
                         {u.active ? 'Disable' : 'Enable'}
                       </button>
                     )}
-                    <button onClick={() => reset(u)} className="text-blue-700 underline text-sm">Reset password</button>
+                    {!usernameOnly && <button onClick={() => reset(u)} className="text-blue-700 underline text-sm">Reset password</button>}
                   </td>
                 </tr>
               );
@@ -693,6 +885,10 @@ function AuditTab({ onError }) {
 
 const SSCInfractionsSystem = () => {
   const [auth, setAuth] = useState({ status: 'loading', user: null, mustChange: false });
+  const [usernameOnly, setUsernameOnly] = useState(false);
+  useEffect(() => {
+    api('/auth/config').then((c) => setUsernameOnly(!!c.usernameOnly)).catch(() => {});
+  }, []);
   const [loginError, setLoginError] = useState('');
   const [busy, setBusy] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -769,14 +965,15 @@ const SSCInfractionsSystem = () => {
   };
 
   const user = auth.user;
-  const canWrite = user && (user.role === 'admin' || user.role === 'staff');
-  const isAdmin = user && user.role === 'admin';
+  // One level of access: anyone signed in can do everything.
+  const canWrite = !!user;
+  const isAdmin = !!user;
 
   let screen;
   if (auth.status === 'loading') {
     screen = <div className="min-h-screen bg-gradient-to-br from-red-900 to-yellow-600 flex items-center justify-center text-white text-lg">Loading...</div>;
   } else if (auth.status === 'out') {
-    screen = <LoginScreen onLogin={handleLogin} error={loginError} busy={busy} />;
+    screen = <LoginScreen onLogin={handleLogin} error={loginError} busy={busy} usernameOnly={usernameOnly} />;
   } else if (auth.mustChange) {
     screen = <ChangePasswordScreen user={user} onSubmit={handleChangePassword} onLogout={handleLogout} />;
   } else {
@@ -806,7 +1003,7 @@ const SSCInfractionsSystem = () => {
               </div>
               <div className="text-right">
                 <div className="text-lg font-semibold">{user.fullName}</div>
-                <div className="text-sm opacity-80 mb-2">Role: {user.role}</div>
+                <div className="mb-2"></div>
                 <button onClick={handleLogout} className="bg-white/20 border-2 border-white text-white px-4 py-2 rounded-lg font-semibold hover:bg-white hover:text-red-900 transition">
                   Logout
                 </button>
@@ -839,7 +1036,7 @@ const SSCInfractionsSystem = () => {
             {activeTab === 'students' && (
               <StudentsTab students={students} canWrite={canWrite} reload={loadData} notify={displayAlert} onError={handleError} />
             )}
-            {activeTab === 'users' && isAdmin && <UsersTab currentUser={user} notify={displayAlert} onError={handleError} />}
+            {activeTab === 'users' && isAdmin && <UsersTab currentUser={user} notify={displayAlert} onError={handleError} usernameOnly={usernameOnly} />}
             {activeTab === 'audit' && isAdmin && <AuditTab onError={handleError} />}
           </div>
         </div>
